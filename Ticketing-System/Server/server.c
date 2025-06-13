@@ -4,16 +4,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include "../Tickets/ticket.h" //includo solo questo includere il ticket.c e' cattiva pratica
 
 #define PORT 8080
 #define BUF_SIZE 1024
-
 
 void createSocket(int *server_fd);
 void configureAddress(struct sockaddr_in *address);
 void binding(int server_fd, struct sockaddr *address, socklen_t addrlen);
 void acceptConnections(int server_fd, int *new_socket);
-
+void hendleClientRequest(int socket, int bytes_read);
 
 int main(){
     int server_fd, new_socket;
@@ -54,14 +54,7 @@ int main(){
     printf("Messaggio ricevuto: %s\n", buffer);
 
     // Invia una risposta al client
-    const char *response = "Messaggio ricevuto con successo!";
-    if (send(new_socket, response, strlen(response), 0) < 0) {
-        perror("Send failed");
-        close(new_socket);
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-    printf("Risposta inviata al client.\n");
+    hendleClientRequest(new_socket, bytes_read);
 
     // Chiude il socket del client
     close(new_socket);
@@ -113,6 +106,49 @@ void acceptConnections(int server_fd, int *new_socket) {
     }
 
     printf("Connessione accettata da %s:%d\n",
-           inet_ntoa(client_address.sin_addr),
-           ntohs(client_address.sin_port));
+        inet_ntoa(client_address.sin_addr),
+        ntohs(client_address.sin_port));
 }
+
+void hendleClientRequest(int socket, int bytes_read) {
+    char buffer[1024] = {0};
+    bytes_read = read(socket, buffer, sizeof(buffer) - 1);
+    if (bytes_read <= 0) {
+        perror("Errore nella ricezione");
+        return;
+    }
+
+    buffer[bytes_read] = '\0'; // Termina la stringa
+    printf("Messaggio ricevuto: %s\n", buffer);
+
+    if (strncmp(buffer, "NEW_TICKET|", 11) == 0) {
+        char *titolo = strtok(buffer + 11, "|");
+        char *descrizione = strtok(NULL, "|");
+        char *priorita = strtok(NULL, "|");
+
+        if (titolo && descrizione && priorita) {
+            Ticket t;
+            t.id = generateNewTicketId();
+            strncpy(t.titolo, titolo, sizeof(t.titolo) - 1);
+            strncpy(t.descrizione, descrizione, sizeof(t.descrizione) - 1);
+            getCurrentDate(t.data_creazione);
+            strncpy(t.priorita, priorita, sizeof(t.priorita) - 1);
+            strncpy(t.stato, "Aperto", sizeof(t.stato) - 1);
+            strncpy(t.agente, "nessuno", sizeof(t.agente) - 1);
+
+            if (saveTicket(&t) == 0) {
+                char risposta[128];
+                snprintf(risposta, sizeof(risposta), "OK|Ticket salvato con ID %d", t.id);
+                send(socket, risposta, strlen(risposta), 0);
+                printf("✅ Ticket salvato (ID: %d)\n", t.id);
+            } else {
+                send(socket, "ERR|Errore salvataggio", 23, 0);
+            }
+        } else {
+            send(socket, "ERR|Sintassi: NEW_TICKET|Titolo|Descrizione|Priorita", 55, 0);
+        }
+    } else {
+        send(socket, "ERR|Comando sconosciuto", 24, 0);
+    }
+}
+
