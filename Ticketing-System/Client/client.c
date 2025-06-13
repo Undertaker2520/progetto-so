@@ -5,8 +5,6 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-
-
 void createSocket(int *client_fd);
 void configureAddress(struct sockaddr_in *address);
 void connectToServer(int client_fd, struct sockaddr_in *address);

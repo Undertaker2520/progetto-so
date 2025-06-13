@@ -1,5 +1,3 @@
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,4 +79,22 @@ int parse_ticket_string(const char *s, Ticket *t) {
     strncpy(t->agente, tok, sizeof(t->agente)-1);
 
     return 0;
+}
+
+int readTicketById(int id, Ticket *ticket) {
+    FILE *file = fopen(TICKET_FILE, "rb");
+    if (!file) {
+        perror("Errore apertura file tickets.db");
+        return -1;
+    }
+
+    while (fread(ticket, sizeof(Ticket), 1, file)) {
+        if (ticket->id == id) {
+            fclose(file);
+            return 0; // trovato
+        }
+    }
+
+    fclose(file);
+    return -1; // non trovato
 }
