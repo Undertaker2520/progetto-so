@@ -13,4 +13,8 @@ typedef struct {
     char agente[50];         // Nome agente o "nessuno"
 } Ticket;
 
+int generateNewTicketId();
+void getCurrentDate(char *date);
+int saveTicket(Ticket *ticket);
+int parse_ticket_string(const char *ticket_string, Ticket *ticket);
 #endif
