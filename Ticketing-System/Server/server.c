@@ -13,14 +13,13 @@ void createSocket(int *server_fd);
 void configureAddress(struct sockaddr_in *address);
 void binding(int server_fd, struct sockaddr *address, socklen_t addrlen);
 void acceptConnections(int server_fd, int *new_socket);
-void hendleClientRequest(int socket, int bytes_read);
+void handleClientRequest(int socket);
 
 int main(){
     int server_fd, new_socket;
     struct sockaddr_in address;
     int opt = 1;
     int addrlen = sizeof(address);
-    char buffer[BUF_SIZE] = {0};
 
     // creazione socket ipv4 e socket TCP
     createSocket(&server_fd);
@@ -42,23 +41,12 @@ int main(){
 
     // Accetta una connessione in arrivo
     acceptConnections(server_fd, &new_socket);
-    
-    // Riceve dati dal client
-    int bytes_read = read(new_socket, buffer, BUF_SIZE);
-    if (bytes_read < 0) {
-        perror("Read failed");
-        close(new_socket);
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-    printf("Messaggio ricevuto: %s\n", buffer);
 
-    // Invia una risposta al client
-    hendleClientRequest(new_socket, bytes_read);
+    // Gestisce la richiesta del client e invia risposta
+    handleClientRequest(new_socket);
 
-    // Chiude il socket del client
+    // Chiude la connessione
     close(new_socket);
-    // Chiude il socket del server
     close(server_fd);
     printf("Server chiuso.\n");
 
@@ -110,17 +98,20 @@ void acceptConnections(int server_fd, int *new_socket) {
         ntohs(client_address.sin_port));
 }
 
-void hendleClientRequest(int socket, int bytes_read) {
+void handleClientRequest(int socket) {
     char buffer[1024] = {0};
-    bytes_read = read(socket, buffer, sizeof(buffer) - 1);
-    if (bytes_read <= 0) {
-        perror("Errore nella ricezione");
-        return;
+
+    int bytes_read = read(socket, buffer, BUF_SIZE);
+    if (bytes_read < 0) {
+        perror("Read failed");
+        close(socket);
+        exit(EXIT_FAILURE);
     }
 
-    buffer[bytes_read] = '\0'; // Termina la stringa
+    buffer[bytes_read] = '\0'; // Assicura fine stringa
     printf("Messaggio ricevuto: %s\n", buffer);
 
+    // Gestione creazione nuovo ticket
     if (strncmp(buffer, "NEW_TICKET|", 11) == 0) {
         char *titolo = strtok(buffer + 11, "|");
         char *descrizione = strtok(NULL, "|");
@@ -147,8 +138,29 @@ void hendleClientRequest(int socket, int bytes_read) {
         } else {
             send(socket, "ERR|Sintassi: NEW_TICKET|Titolo|Descrizione|Priorita", 55, 0);
         }
+
+    // Gestione lettura ticket tramite ID
+    } else if (strncmp(buffer, "GET_TICKET|", 11) == 0) {
+        int id = atoi(buffer + 11); // estrae ID dalla stringa
+
+        if (id <= 0) {
+            send(socket, "ERR|ID non valido", 18, 0);
+            return;
+        }
+
+        Ticket t;
+        if (readTicketById(id, &t) == 0) {
+            char risposta[512];
+            snprintf(risposta, sizeof(risposta),
+                     "OK|ID:%d|Titolo:%s|Descrizione:%s|Data:%s|Priorita:%s|Stato:%s|Agente:%s",
+                     t.id, t.titolo, t.descrizione, t.data_creazione,
+                     t.priorita, t.stato, t.agente);
+            send(socket, risposta, strlen(risposta), 0);
+        } else {
+            send(socket, "ERR|Ticket non trovato", 23, 0);
+        }
+
     } else {
         send(socket, "ERR|Comando sconosciuto", 24, 0);
     }
 }
-
