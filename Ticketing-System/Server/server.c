@@ -21,6 +21,7 @@ int main(){
     int opt = 1;
     int addrlen = sizeof(address);
 
+    /* === INIZIO CODICE ORIGINALE === */
     // creazione socket ipv4 e socket TCP
     createSocket(&server_fd);
 
@@ -29,6 +30,7 @@ int main(){
 
     // Binding del socket ad un indirizzo e porta specifici
     binding(server_fd, (struct sockaddr *)&address, sizeof(address));
+    /* === FINE CODICE ORIGINALE === */
 
     // Ascolta le connessioni in arrivo
     if (listen(server_fd, 3) < 0) {
@@ -37,18 +39,41 @@ int main(){
         exit(EXIT_FAILURE);
     }
 
-    printf("Server in ascolto sulla porta %d...\n", PORT);
+    printf("✅ Server in ascolto sulla porta %d...\n", PORT);
 
-    // Accetta una connessione in arrivo
-    acceptConnections(server_fd, &new_socket);
+    /* === TEST DI STAMPA DEI TICKET (MODIFICHE EMA) === */
+    /*
+    char ticket_buffer[10240]; //Buffer bello grosso nel dubbio
+    int num_tickets = getAllTickets(ticket_buffer, sizeof(ticket_buffer));
 
-    // Gestisce la richiesta del client e invia risposta
-    handleClientRequest(new_socket);
+    if(num_tickets < 0) {
+        fprintf(stderr, "Errore nella lettura dei Tickets.\n");
+    } else if(num_tickets == 0) {
+        printf("Nessun ticket presente.\n");
+    } else {
+        printf("Tickets trovati: %d\n", num_tickets);
+        printf("Contenuto dei Tickets:\n%s\n", ticket_buffer);
+    }
+    */
+    /* === FINE MODIFICHE EMA === */
 
-    // Chiude la connessione
-    close(new_socket);
-    close(server_fd);
-    printf("Server chiuso.\n");
+    /* === INIZIO MODIFICHE EMA: SERVER SEMPRE ATTIVO === */
+    while (1) {
+        // Accetta una connessione in arrivo
+        acceptConnections(server_fd, &new_socket);
+
+        // Gestisce la richiesta del client e invia risposta
+        handleClientRequest(new_socket);
+
+        // Chiude la connessione con il client
+        close(new_socket);
+
+        printf("🔁 In attesa di una nuova connessione...\n");
+    }
+    /* === FINE MODIFICHE EMA === */
+
+    // (NON si chiude più qui il server_fd perché il server è sempre attivo)
+    // Se vorrai implementare un comando per chiudere il server da remoto, lo gestirai altrove
 
     return 0;
 }
@@ -139,28 +164,22 @@ void handleClientRequest(int socket) {
             send(socket, "ERR|Sintassi: NEW_TICKET|Titolo|Descrizione|Priorita", 55, 0);
         }
 
-    // Gestione lettura ticket tramite ID
-    } else if (strncmp(buffer, "GET_TICKET|", 11) == 0) {
-        int id = atoi(buffer + 11); // estrae ID dalla stringa
+    // Gestione richiesta all ticket - EMA
+    } else if (strncmp(buffer, "GET_ALL_TICKETS", 15) == 0) {
+        char ticket_buffer[8192];
+        int num_tickets = getAllTickets(ticket_buffer, sizeof(ticket_buffer));
 
-        if (id <= 0) {
-            send(socket, "ERR|ID non valido", 18, 0);
-            return;
-        }
-
-        Ticket t;
-        if (readTicketById(id, &t) == 0) {
-            char risposta[512];
-            snprintf(risposta, sizeof(risposta),
-                     "OK|ID:%d|Titolo:%s|Descrizione:%s|Data:%s|Priorita:%s|Stato:%s|Agente:%s",
-                     t.id, t.titolo, t.descrizione, t.data_creazione,
-                     t.priorita, t.stato, t.agente);
-            send(socket, risposta, strlen(risposta), 0);
+        if (num_tickets < 0) {
+            send(socket, "ERR|Errore lettura tickets", 27, 0);
+        } else if (num_tickets == 0) {
+            send(socket, "OK|Nessun ticket presente", 26, 0);
         } else {
-            send(socket, "ERR|Ticket non trovato", 23, 0);
+            send(socket, ticket_buffer, strlen(ticket_buffer), 0);
         }
 
     } else {
         send(socket, "ERR|Comando sconosciuto", 24, 0);
     }
 }
+
+

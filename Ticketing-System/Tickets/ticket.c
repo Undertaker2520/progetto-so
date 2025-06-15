@@ -98,3 +98,51 @@ int readTicketById(int id, Ticket *ticket) {
     fclose(file);
     return -1; // non trovato
 }
+
+int getAllTickets(char *buffer, size_t bufsize) {
+    FILE *file = fopen(TICKET_FILE, "rb");
+    if (!file) {
+        // File non esiste
+        return -1;
+    }
+
+    Ticket ticket;
+    int count = 0;
+    size_t used = 0;
+
+    while (fread(&ticket, sizeof(Ticket), 1, file)) {
+        // Prepariamo una rappresentazione testuale di un singolo ticket
+        char temp[512];
+        int written = snprintf(
+            temp, sizeof(temp),
+            "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
+            ticket.id,
+            ticket.titolo,
+            ticket.descrizione,
+            ticket.data_creazione,
+            ticket.priorita,
+            ticket.stato,
+            ticket.agente
+        );
+
+        // Controlliamo se abbiamo spazio nel buffer
+        if (used + written >= bufsize) {
+            // Non c'è più spazio, interrompiamo
+            break;
+        }
+
+        // Copia nel buffer
+        memcpy(buffer + used, temp, written);
+        used += written;
+        count++;
+    }
+
+    fclose(file);
+
+    if (count == 0) {
+        return 0; // file presente ma nessun ticket
+    }
+
+    buffer[used] = '\0'; // terminatore di stringa
+    return count;
+}

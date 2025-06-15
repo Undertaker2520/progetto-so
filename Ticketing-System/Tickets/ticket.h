@@ -18,4 +18,5 @@ void getCurrentDate(char *date);
 int saveTicket(Ticket *ticket);
 int parse_ticket_string(const char *ticket_string, Ticket *ticket);
 int readTicketById(int id, Ticket *ticket);
+int getAllTickets(char *buffer, size_t bufsize);
 #endif

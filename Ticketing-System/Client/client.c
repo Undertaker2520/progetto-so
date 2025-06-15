@@ -1,4 +1,4 @@
-// server/server.c
+// client/client.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,31 +13,24 @@ typedef enum {
 
 
 void createSocket(int *client_fd);
+void clientRoutine(int client_fd);
 void configureAddress(struct sockaddr_in *address);
 void connectToServer(int client_fd, struct sockaddr_in *address);
 void ticketComponentWriter(CampoTicket campo, char *dest, int max_length);
 void buildTicketMessage(char *dest, int max_length);
 
 int main(){
-
-    printf("Debug: flush eseguita\n");
-    // Costruzione messaggio del ticket
-    char messaggio[380]; //Calcolare max dimensioni considerando i '|' a dividere i campi
-    printf("Debug: preBuild\n");
-    buildTicketMessage(messaggio, sizeof(messaggio));
-    printf("Debug: preSend; Messaggio = %s\n", messaggio);
     int client_fd;
     struct sockaddr_in address;
 
     createSocket(&client_fd);
-
     configureAddress(&address);
-    // Connessione al server
     connectToServer(client_fd, &address);
-    
 
+    // Avvio della routine client con menu
+    clientRoutine(client_fd);
 
-    send(client_fd, messaggio, strlen(messaggio), 0);
+    return 0;
 }
 
 void createSocket(int *client_fd){
@@ -104,4 +97,53 @@ void buildTicketMessage(char *dest, int max_length) {
     // Formattazione del messaggio del ticket
     
     snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
+}
+
+void clientRoutine(int client_fd) {
+    char scelta[10];
+    char messaggio[512];
+
+    while (1) {
+        printf("\n--- MENU ---\n");
+        printf("1. Inserisci un nuovo ticket\n");
+        printf("2. Visualizza tutti i ticket\n");
+        printf("3. Esci\n");
+        printf("Seleziona un'opzione: ");
+
+        fgets(scelta, sizeof(scelta), stdin);
+
+        if (scelta[0] == '1') {
+            // Costruzione ticket
+            memset(messaggio, 0, sizeof(messaggio));
+            buildTicketMessage(messaggio, sizeof(messaggio));
+            send(client_fd, messaggio, strlen(messaggio), 0);
+
+            char risposta[2048];
+            memset(risposta, 0, sizeof(risposta));
+            recv(client_fd, risposta, sizeof(risposta) - 1, 0);
+            printf("Risposta del server: %s\n", risposta);
+
+        } else if (scelta[0] == '2') {
+            strcpy(messaggio, "GET_ALL_TICKETS");
+            send(client_fd, messaggio, strlen(messaggio), 0);
+
+            printf("Risposta del server:\n");
+            char buffer[512];
+            int bytes_received;
+            while ((bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+                buffer[bytes_received] = '\0';
+                printf("%s", buffer);
+            }
+            printf("\n");
+
+        } else if (scelta[0] == '3') {
+            printf("Chiusura connessione e uscita...\n");
+            break;
+
+        } else {
+            printf("Opzione non valida. Riprova.\n");
+        }
+    }
+
+    close(client_fd);
 }
