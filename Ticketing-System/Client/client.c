@@ -5,12 +5,27 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+typedef enum {
+    TITOLO,
+    DESCRIZIONE,
+    PRIORITA
+} CampoTicket;
+
+
 void createSocket(int *client_fd);
 void configureAddress(struct sockaddr_in *address);
 void connectToServer(int client_fd, struct sockaddr_in *address);
-
+void ticketComponentWriter(CampoTicket campo, char *dest, int max_length);
+void buildTicketMessage(char *dest, int max_length);
 
 int main(){
+
+    printf("Debug: flush eseguita\n");
+    // Costruzione messaggio del ticket
+    char messaggio[380]; //Calcolare max dimensioni considerando i '|' a dividere i campi
+    printf("Debug: preBuild\n");
+    buildTicketMessage(messaggio, sizeof(messaggio));
+    printf("Debug: preSend; Messaggio = %s\n", messaggio);
     int client_fd;
     struct sockaddr_in address;
 
@@ -19,6 +34,10 @@ int main(){
     configureAddress(&address);
     // Connessione al server
     connectToServer(client_fd, &address);
+    
+
+
+    send(client_fd, messaggio, strlen(messaggio), 0);
 }
 
 void createSocket(int *client_fd){
@@ -52,3 +71,37 @@ void connectToServer(int client_fd, struct sockaddr_in *address) {
     printf("Connessione al server avvenuta con successo.\n");
 }
 
+void ticketComponentWriter(CampoTicket campo, char *dest, int max_length) {
+    printf("Debug: sto leggendo il campo %d\n", campo);
+    char input[256];
+    printf("Inserisci il %s del ticket: ", (campo == TITOLO) ? "titolo" : (campo == DESCRIZIONE) ? "descrizione" : "priorità");
+    
+    // Lettura dell'input dell'utente
+    fgets(input, sizeof(input), stdin);
+    
+    // Rimozione del carattere di nuova linea
+    input[strcspn(input, "\n")] = 0;
+
+    // Controllo della lunghezza massima (> stretto perchè fgets può restituire max_length -1 + '\0'!)
+    if (strlen(input) > max_length) {
+        fprintf(stderr, "Errore: Il %s supera la lunghezza massima di %d caratteri.\n", 
+                (campo == TITOLO) ? "titolo" : (campo == DESCRIZIONE) ? "descrizione" : "priorità", max_length);
+        exit(EXIT_FAILURE);
+    }
+
+    // Copia dell'input nella destinazione
+    strncpy(dest, input, max_length);
+}
+
+void buildTicketMessage(char *dest, int max_length) {
+    char titolo[100], descrizione[256], priorita[10];
+    
+    // Scrittura dei campi del ticket
+    ticketComponentWriter(TITOLO, titolo, sizeof(titolo));
+    ticketComponentWriter(DESCRIZIONE, descrizione, sizeof(descrizione));
+    ticketComponentWriter(PRIORITA, priorita, sizeof(priorita));
+
+    // Formattazione del messaggio del ticket
+    
+    snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
+}
