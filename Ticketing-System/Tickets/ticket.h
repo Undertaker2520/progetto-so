@@ -19,4 +19,5 @@ int saveTicket(Ticket *ticket);
 int parse_ticket_string(const char *ticket_string, Ticket *ticket);
 int readTicketById(int id, Ticket *ticket);
 int getAllTickets(char *buffer, size_t bufsize);
+void createNewTicket(int socket, const char *buffer, Ticket *t);
 #endif

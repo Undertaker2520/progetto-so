@@ -11,7 +11,6 @@ typedef enum {
     PRIORITA
 } CampoTicket;
 
-
 void createSocket(int *client_fd);
 void clientRoutine(int client_fd);
 void configureAddress(struct sockaddr_in *address);
@@ -95,7 +94,6 @@ void buildTicketMessage(char *dest, int max_length) {
     ticketComponentWriter(PRIORITA, priorita, sizeof(priorita));
 
     // Formattazione del messaggio del ticket
-    
     snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
 }
 
