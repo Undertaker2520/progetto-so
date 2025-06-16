@@ -149,37 +149,29 @@ int getAllTickets(char *buffer, size_t bufsize) {
     return count;
 }
 
-void createNewTicket(int socket, const char *buffer, Ticket *t) {
-    // Copia il buffer in una variabile temporanea per evitare overflow
+int createNewTicket(const char *buffer) {
+    Ticket t;
     char temp[1024];
     strncpy(temp, buffer, sizeof(temp) - 1);
-    temp[sizeof(temp) - 1] = '\0'; // Assicura che la stringa sia terminata
-    
+    temp[sizeof(temp) - 1] = '\0';
+
     char *titolo = strtok(temp + 11, "|");
     char *descrizione = strtok(NULL, "|");
     char *priorita = strtok(NULL, "|");
 
-        
     if (titolo && descrizione && priorita) {
-            
-        t->id = generateNewTicketId();
-        strncpy(t->titolo, titolo, sizeof(t->titolo) - 1);
-        strncpy(t->descrizione, descrizione, sizeof(t->descrizione) - 1);
-        getCurrentDate(t->data_creazione);
-        strncpy(t->priorita, priorita, sizeof(t->priorita) - 1);
-        strncpy(t->stato, "Aperto", sizeof(t->stato) - 1);
-        strncpy(t->agente, "nessuno", sizeof(t->agente) - 1);
+        t.id = generateNewTicketId();
+        strncpy(t.titolo, titolo, sizeof(t.titolo) - 1);
+        strncpy(t.descrizione, descrizione, sizeof(t.descrizione) - 1);
+        getCurrentDate(t.data_creazione);
+        strncpy(t.priorita, priorita, sizeof(t.priorita) - 1);
+        strncpy(t.stato, "Aperto", sizeof(t.stato) - 1);
+        strncpy(t.agente, "nessuno", sizeof(t.agente) - 1);
 
-        if (saveTicket(t) == 0) {
-            char risposta[128];
-            snprintf(risposta, sizeof(risposta), "OK|Ticket salvato con ID %d", t->id);
-            send(socket, risposta, strlen(risposta), 0);
-            printf("✅ Ticket salvato (ID: %d)\n", t->id);
-        } else {
-            send(socket, "ERR|Errore salvataggio", 23, 0);
-        }
-    } else {
-        send(socket, "ERR|Sintassi: NEW_TICKET|Titolo|Descrizione|Priorita", 55, 0);
+        return saveTicket(&t) == 0 ? t.id : -1;
     }
+
+    return -2; // errore di sintassi
 }
+
 
