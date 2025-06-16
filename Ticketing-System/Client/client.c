@@ -126,14 +126,15 @@ void clientRoutine(int client_fd) {
             send(client_fd, messaggio, strlen(messaggio), 0);
 
             printf("Risposta del server:\n");
-            char buffer[512];
-            int bytes_received;
-            while ((bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
-                buffer[bytes_received] = '\0';
-                printf("%s", buffer);
+            char risposta[8192];
+            memset(risposta, 0, sizeof(risposta));
+            int bytes = recv(client_fd, risposta, sizeof(risposta) - 1, 0);
+            if (bytes > 0) {
+                risposta[bytes] = '\0';
+                printf("%s\n", risposta);
+            } else {
+                perror("Errore nella ricezione della risposta");
             }
-            printf("\n");
-
         } else if (scelta[0] == '3') {
             printf("Chiusura connessione e uscita...\n");
             break;

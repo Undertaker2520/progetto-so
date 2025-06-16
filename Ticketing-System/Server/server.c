@@ -13,7 +13,7 @@ void createSocket(int *server_fd);
 void configureAddress(struct sockaddr_in *address);
 void binding(int server_fd, struct sockaddr *address, socklen_t addrlen);
 void acceptConnections(int server_fd, int *new_socket);
-void handleClientRequest(int socket);
+int handleClientRequest(int socket);
 void createNewTicket(int socket, const char *buffer, Ticket *t);
 
 int main(){
@@ -46,7 +46,11 @@ int main(){
         acceptConnections(server_fd, &new_socket);
 
         // Gestisce la richiesta del client e invia risposta
-        handleClientRequest(new_socket);
+        while (1) {
+            if (handleClientRequest(new_socket) == 0) {
+                break; // client ha chiuso la connessione o ha inviato un comando di uscita
+            }
+        }
 
         // Chiude la connessione con il client
         close(new_socket);
@@ -102,15 +106,15 @@ void acceptConnections(int server_fd, int *new_socket) {
         ntohs(client_address.sin_port));
 }
 
-void handleClientRequest(int socket) {
+int handleClientRequest(int socket) {
     char buffer[1024] = {0};
 
     int bytes_read = read(socket, buffer, BUF_SIZE);
-    if (bytes_read < 0) {
-        perror("Read failed");
-        close(socket);
-        exit(EXIT_FAILURE);
+    if (bytes_read <= 0) {
+        perror("Read failed o connessione chiusa");
+        return 0; // interrompe la connessione
     }
+
 
     buffer[bytes_read] = '\0'; // Assicura fine stringa
     printf("Messaggio ricevuto: %s\n", buffer);
@@ -137,4 +141,5 @@ void handleClientRequest(int socket) {
     } else {
         send(socket, "ERR|Comando sconosciuto", 24, 0);
     }
+    return 1;
 }
