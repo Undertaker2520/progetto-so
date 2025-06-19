@@ -5,29 +5,89 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-typedef enum {
-    TITOLO,
-    DESCRIZIONE,
-    PRIORITA
-} CampoTicket;
+#include "menu_client.h"   // contiene la dichiarazione avviaMenuClient
+#include "menu_agent.h"    // contiene la dichiarazione avviaMenuAgente
 
-void createSocket(int *client_fd);
-void configureAddress(struct sockaddr_in *address);
-void connectToServer(int client_fd, struct sockaddr_in *address);
-void ticketComponentWriter(CampoTicket campo, char *dest, int max_length);
-void buildTicketMessage(char *dest, int max_length);
-void avviaMenuClient(int client_fd);
-void avviaMenuAgente(int client_fd);
+// Invia tutto il buffer di dimensione len
+int send_all(int sockfd, const void *buffer, size_t len) {
+    size_t total_sent = 0;
+    const char *ptr = buffer;
+    while (total_sent < len) {
+        ssize_t sent = send(sockfd, ptr + total_sent, len - total_sent, 0);
+        if (sent <= 0) {
+            return -1;  // errore o connessione chiusa
+        }
+        total_sent += sent;
+    }
+    return total_sent;
+}
+
+// Riceve dati da sockfd finché non trova il carattere delim, o buffer è pieno
+// Restituisce il numero di byte ricevuti, o -1 in caso di errore
+int recv_until(int sockfd, char *buffer, size_t maxlen, char delim) {
+    size_t received = 0;
+    while (received < maxlen - 1) {
+        char c;
+        ssize_t ret = recv(sockfd, &c, 1, 0);
+        if (ret <= 0) {
+            return -1;  // Errore o connessione chiusa
+        }
+        buffer[received++] = c;
+        if (c == delim) {
+            break;
+        }
+    }
+    buffer[received] = '\0';
+    return received;
+}
+
+void buildTicketMessage(char *dest, int max_length) {
+    char titolo[100], descrizione[256], priorita[10];
+
+    printf("Inserisci titolo: ");
+    fgets(titolo, sizeof(titolo), stdin);
+    titolo[strcspn(titolo, "\n")] = 0;
+
+    printf("Inserisci descrizione: ");
+    fgets(descrizione, sizeof(descrizione), stdin);
+    descrizione[strcspn(descrizione, "\n")] = 0;
+
+    printf("Inserisci priorità (Bassa, Media, Alta): ");
+    fgets(priorita, sizeof(priorita), stdin);
+    priorita[strcspn(priorita, "\n")] = 0;
+
+    snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
+}
 
 int main() {
     int client_fd;
     struct sockaddr_in address;
 
-    createSocket(&client_fd);
-    configureAddress(&address);
-    connectToServer(client_fd, &address);
+    // Creazione socket
+    client_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (client_fd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
 
-    // First Login
+    // Configurazione indirizzo server
+    address.sin_family = AF_INET;
+    address.sin_port = htons(8080);
+    if (inet_pton(AF_INET, "127.0.0.1", &address.sin_addr) <= 0) {
+        perror("Invalid address");
+        close(client_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Connessione al server
+    if (connect(client_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("Connection failed");
+        close(client_fd);
+        exit(EXIT_FAILURE);
+    }
+    printf("Connessione al server avvenuta con successo.\n");
+
+    // Login
     char username[64], password[64], ruolo[16] = {0};
 
     printf("Login\nUsername: ");
@@ -39,151 +99,41 @@ int main() {
     password[strcspn(password, "\n")] = 0;
 
     char login_msg[256];
-    snprintf(login_msg, sizeof(login_msg), "LOGIN|%s|%s", username, password);
-    send(client_fd, login_msg, strlen(login_msg), 0);
+    snprintf(login_msg, sizeof(login_msg), "LOGIN|%s|%s\n", username, password);
 
+    // Invio login
+    if (send_all(client_fd, login_msg, strlen(login_msg)) < 0) {
+        perror("Errore invio login");
+        close(client_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Ricezione risposta login (terminata da '\n')
     char login_resp[64];
-    int bytes = recv(client_fd, login_resp, sizeof(login_resp) - 1, 0);
+    int bytes = recv_until(client_fd, login_resp, sizeof(login_resp), '\n');
     if (bytes <= 0) {
         printf("Errore nella comunicazione con il server.\n");
         close(client_fd);
         return 1;
     }
-    login_resp[bytes] = '\0';
 
+    // Controllo risposta
     if (strncmp(login_resp, "OK|Login riuscito|CLIENT", 24) == 0) {
         strcpy(ruolo, "CLIENT");
     } else if (strncmp(login_resp, "OK|Login riuscito|AGENTE", 24) == 0) {
         strcpy(ruolo, "AGENTE");
-    }
-    else {
+    } else {
         printf("Login fallito: %s\n", login_resp);
         close(client_fd);
         return 1;
     }
 
-    // Menu Post Login
+    // Chiamata ai menu esterni
     if (strcmp(ruolo, "CLIENT") == 0) {
         avviaMenuClient(client_fd);
-    } else {
+    } else if (strcmp(ruolo, "AGENTE") == 0) {
         avviaMenuAgente(client_fd);
     }
 
     return 0;
-}
-
-void createSocket(int *client_fd) {
-    *client_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (*client_fd < 0) {
-        perror("Socket creation failed");
-        exit(EXIT_FAILURE);
-    }
-}
-
-void configureAddress(struct sockaddr_in *address) {
-    address->sin_family = AF_INET;
-    address->sin_port = htons(8080);
-    if (inet_pton(AF_INET, "127.0.0.1", &address->sin_addr) <= 0) {
-        perror("Invalid address");
-        exit(EXIT_FAILURE);
-    }
-}
-
-void connectToServer(int client_fd, struct sockaddr_in *address) {
-    if (connect(client_fd, (struct sockaddr *)address, sizeof(*address)) < 0) {
-        perror("Connection failed");
-        close(client_fd);
-        exit(EXIT_FAILURE);
-    }
-    printf("Connessione al server avvenuta con successo.\n");
-}
-
-void ticketComponentWriter(CampoTicket campo, char *dest, int max_length) {
-    char input[256];
-    const char *nome_campo = (campo == TITOLO) ? "titolo" :
-                              (campo == DESCRIZIONE) ? "descrizione" : "priorità";
-    printf("Inserisci il %s del ticket: ", nome_campo);
-    fgets(input, sizeof(input), stdin);
-    input[strcspn(input, "\n")] = 0;
-
-    if (strlen(input) > max_length) {
-        fprintf(stderr, "Errore: Il %s supera la lunghezza massima di %d caratteri.\n", nome_campo, max_length);
-        exit(EXIT_FAILURE);
-    }
-
-    strncpy(dest, input, max_length);
-}
-
-void buildTicketMessage(char *dest, int max_length) {
-    char titolo[100], descrizione[256], priorita[10];
-    ticketComponentWriter(TITOLO, titolo, sizeof(titolo));
-    ticketComponentWriter(DESCRIZIONE, descrizione, sizeof(descrizione));
-    ticketComponentWriter(PRIORITA, priorita, sizeof(priorita));
-    snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
-}
-
-// Menu Client
-void avviaMenuClient(int client_fd) {
-    char scelta[10], messaggio[512];
-
-    while (1) {
-        printf("\n--- MENU CLIENT ---\n");
-        printf("1. Inserisci un nuovo ticket\n");
-        printf("2. Visualizza tutti i ticket\n");
-        printf("3. Cerca un ticket per ID\n");
-        printf("0. Esci\n");
-        printf("Scelta: ");
-        fgets(scelta, sizeof(scelta), stdin);
-
-        if (scelta[0] == '1') {
-            memset(messaggio, 0, sizeof(messaggio));
-            buildTicketMessage(messaggio, sizeof(messaggio));
-            send(client_fd, messaggio, strlen(messaggio), 0);
-
-            char risposta[2048] = {0};
-            recv(client_fd, risposta, sizeof(risposta) - 1, 0);
-            printf("Risposta: %s\n", risposta);
-
-        } else if (scelta[0] == '2') {
-            strcpy(messaggio, "GET_ALL_TICKETS");
-            send(client_fd, messaggio, strlen(messaggio), 0);
-
-            char risposta[8192] = {0};
-            int bytes = recv(client_fd, risposta, sizeof(risposta) - 1, 0);
-            if (bytes > 0) {
-                risposta[bytes] = '\0';
-                printf("%s\n", risposta);
-            }
-
-        } else if (scelta[0] == '3') {
-            char id_input[10];
-            printf("Inserisci ID: ");
-            fgets(id_input, sizeof(id_input), stdin);
-            id_input[strcspn(id_input, "\n")] = 0;
-
-            snprintf(messaggio, sizeof(messaggio), "GET_TICKET_BY_ID|%s", id_input);
-            send(client_fd, messaggio, strlen(messaggio), 0);
-
-            char risposta[1024] = {0};
-            int bytes = recv(client_fd, risposta, sizeof(risposta) - 1, 0);
-            if (bytes > 0) {
-                risposta[bytes] = '\0';
-                printf("%s\n", risposta);
-            }
-
-        } else if (scelta[0] == '0') {
-            printf("Uscita...\n");
-            break;
-        } else {
-            printf("Scelta non valida.\n");
-        }
-    }
-
-    close(client_fd);
-}
-
-// Menu agente
-void avviaMenuAgente(int client_fd) {
-    printf("\n[AGENTE] Menu in sviluppo.\n");
-    avviaMenuClient(client_fd); // Per ora usa il menu base
 }

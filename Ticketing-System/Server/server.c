@@ -161,6 +161,7 @@ int handleClientRequest(int socket) {
             send(socket, "ERR|Comando sconosciuto", 24, 0);
             break;
     }
+    return 1;
 }
 
 void handleGetAllTickets(int socket) {
