@@ -9,18 +9,21 @@
 
 #define PORT 8080
 #define BUF_SIZE 1024
+#define MAX_CLIENTS 100
+
 
 void createSocket(int *server_fd);
 void configureAddress(struct sockaddr_in *address);
 void binding(int server_fd, struct sockaddr *address, socklen_t addrlen);
 void acceptConnections(int server_fd, int *new_socket);
 int handleClientRequest(int socket);
-int createNewTicket(const char *buffer);
-void handleGetAllTickets(int socket);
-void handleGetTicketById(int socket, const char *buffer);
+void handleGetAllTicketsByLoggedUser(int socket, const char *buffer);
+void handleGetTicketByIdAndLoggedUser(int socket, const char *buffer);
 void handleNewTicket(int socket, const char *buffer);
 int handleLogin(int socket, const char *buffer);
 int authenticateUser(const char *username, const char *password, char *ruolo);
+void salvaSessione(int socket_fd, const char *username);
+const char* getUsernameBySocket(int socket_fd);
 
 
 typedef enum {
@@ -33,12 +36,19 @@ typedef enum {
 
 CommandType parseCommand(const char *buffer) {
     if (strncmp(buffer, "NEW_TICKET|", strlen("NEW_TICKET|")) == 0) return CMD_NEW_TICKET;
-    if (strncmp(buffer, "GET_ALL_TICKETS", strlen("GET_ALL_TICKETS")) == 0) return CMD_GET_ALL;
+    if (strncmp(buffer, "GET_ALL_TICKETS|", strlen("GET_ALL_TICKETS|")) == 0) return CMD_GET_ALL;
     if (strncmp(buffer, "GET_TICKET_BY_ID|", strlen("GET_TICKET_BY_ID|")) == 0) return CMD_GET_BY_ID;
     if (strncmp(buffer, "LOGIN|", strlen("LOGIN")) == 0) return CMD_LOGIN;
     return CMD_UNKNOWN;
 }
 
+typedef struct {
+    int socket_fd;
+    char username[64];
+} Session;
+
+Session sessions[MAX_CLIENTS];
+int session_count = 0;
 
 int main(){
     int server_fd, new_socket;
@@ -56,7 +66,7 @@ int main(){
     binding(server_fd, (struct sockaddr *)&address, sizeof(address));
     /* === FINE CODICE ORIGINALE === */
 
-    // Ascolta le connessioni in arrivo
+    // Ascolta le connessioni in arrivoF
     if (listen(server_fd, 3) < 0) {
         perror("Listen failed");
         close(server_fd);
@@ -167,13 +177,15 @@ int handleClientRequest(int socket) {
             break;
         case CMD_GET_ALL:
             printf("Ricevuto comando GET_ALL_TICKETS\n");
-            handleGetAllTickets(socket);
+            handleGetAllTicketsByLoggedUser(socket, buffer);
             break;
         case CMD_GET_BY_ID:
-            handleGetTicketById(socket, buffer);
+            handleGetTicketByIdAndLoggedUser(socket, buffer);
             break;
         case CMD_LOGIN:
             int login_result = handleLogin(socket, buffer);
+            
+
             if (login_result == 0) {
                 return 0; // chiudi la connessione
             }
@@ -187,9 +199,10 @@ int handleClientRequest(int socket) {
 
 }
 
-void handleGetAllTickets(int socket) {
-    char ticket_buffer[8192];
-    int num_tickets = getAllTickets(ticket_buffer, sizeof(ticket_buffer));
+void handleGetAllTicketsByLoggedUser(int socket, const char *buffer) {
+    const char *username = buffer + strlen("GET_ALL_TICKETS|");
+    char ticket_buffer[8192]; 
+    int num_tickets = getTicketsByUser(username, ticket_buffer, sizeof(ticket_buffer));
 
     printf("Numero di ticket letti: %d\n", num_tickets);
 
@@ -206,26 +219,44 @@ void handleGetAllTickets(int socket) {
     }
 }
 
-void handleGetTicketById(int socket, const char *buffer) {
-    int id = atoi(buffer + strlen("GET_TICKET_BY_ID|")); // Estrai ID
+void handleGetTicketByIdAndLoggedUser(int socket, const char *buffer) {
+    // Estrai ID e username
+    char copy[128];
+    strncpy(copy, buffer, sizeof(copy));
+    copy[sizeof(copy)-1] = '\0';
+
+    char *token = strtok(copy + strlen("GET_TICKET_BY_ID|"), "|");
+    char *username = strtok(NULL, "|");
+    if (!token || !username) {
+        send(socket, "ERR|Formato comando non valido", 30, 0);
+        return;
+    }
+
+    int id = atoi(token);
     Ticket t;
 
-    if (readTicketById(id, &t) == 0) {
+    if (readTicketByIdAndUser(id, username, &t) == 0) {
         char risposta[1024];
-        snprintf(
-            risposta, sizeof(risposta),
+        snprintf(risposta, sizeof(risposta),
             "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n",
-            t.id, t.titolo, t.descrizione, t.data_creazione,
-            t.priorita, t.stato, t.agente
+            t.id, t.titolo, t.descrizione, t.data_creazione, t.priorita, t.stato, t.agente
         );
         send(socket, risposta, strlen(risposta), 0);
     } else {
         send(socket, "ERR|Ticket non trovato", 23, 0);
     }
+
 }
 
 void handleNewTicket(int socket, const char *buffer) {
-    int result = createNewTicket(buffer);
+    
+    const char *username = getUsernameBySocket(socket);
+
+    if (!username) {
+        send(socket, "ERR|Sessione non trovata", 24, 0);
+        return;
+    }
+    int result = createNewTicket(buffer, username); // "nessuno" come username di default, da modificare in base al contesto
 
     if (result > 0) {
         char risposta[128];
@@ -269,6 +300,7 @@ int handleLogin(int socket, const char *buffer) {
                 char risposta[64];
                 snprintf(risposta, sizeof(risposta), "OK|Login riuscito|%s", ruolo);
                 send(socket, risposta, strlen(risposta), 0);
+                salvaSessione(socket, username); // salva la sessione
                 return 1;  // login riuscito
         }
     }
@@ -276,4 +308,26 @@ int handleLogin(int socket, const char *buffer) {
     // se piu di 3 tentativi chiudo la connessione
     send(socket, "ERR|Login fallito dopo 3 tentativi", 34, 0);
     return 0;
+}
+
+void salvaSessione(int socket_fd, const char *username) {
+    for (int i = 0; i < session_count; ++i) {
+        if (sessions[i].socket_fd == socket_fd) {
+            strncpy(sessions[i].username, username, sizeof(sessions[i].username) - 1);
+            return;
+        }
+    }
+    if (session_count < MAX_CLIENTS) {
+        sessions[session_count].socket_fd = socket_fd;
+        strncpy(sessions[session_count].username, username, sizeof(sessions[session_count].username) - 1);
+        session_count++;
+    }
+}
+const char* getUsernameBySocket(int socket_fd) {
+    for (int i = 0; i < session_count; ++i) {
+        if (sessions[i].socket_fd == socket_fd) {
+            return sessions[i].username;
+        }
+    }
+    return NULL;
 }

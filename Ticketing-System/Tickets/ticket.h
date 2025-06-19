@@ -11,6 +11,7 @@ typedef struct {
     char priorita[10];       // Alta, Media, Bassa
     char stato[20];          // Aperto, In Corso, Chiuso
     char agente[50];         // Nome agente o "nessuno"
+    char username[50];     // Nome utente del cliente che ha creato il ticket
 } Ticket;
 
 int generateNewTicketId();
@@ -19,5 +20,7 @@ int saveTicket(Ticket *ticket);
 int parse_ticket_string(const char *ticket_string, Ticket *ticket);
 int readTicketById(int id, Ticket *ticket);
 int getAllTickets(char *buffer, size_t bufsize);
-int createNewTicket(const char *buffer);
+int getTicketsByUser(const char *username, char *buffer, size_t bufsize);
+int readTicketByIdAndUser(int id, const char *username, Ticket *ticket);
+int createNewTicket(const char *buffer, const char *username);
 #endif

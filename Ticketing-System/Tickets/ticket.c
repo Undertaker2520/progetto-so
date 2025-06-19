@@ -149,7 +149,7 @@ int getAllTickets(char *buffer, size_t bufsize) {
     return count;
 }
 
-int createNewTicket(const char *buffer) {
+int createNewTicket(const char *buffer, const char *username){
     Ticket t;
     char temp[1024];
     strncpy(temp, buffer, sizeof(temp) - 1);
@@ -167,11 +167,61 @@ int createNewTicket(const char *buffer) {
         strncpy(t.priorita, priorita, sizeof(t.priorita) - 1);
         strncpy(t.stato, "Aperto", sizeof(t.stato) - 1);
         strncpy(t.agente, "nessuno", sizeof(t.agente) - 1);
+        strncpy(t.username, username, sizeof(t.username) - 1);
 
         return saveTicket(&t) == 0 ? t.id : -1;
     }
 
     return -2; // errore di sintassi
 }
+
+int getTicketsByUser(const char *username, char *buffer, size_t max_size) {
+    FILE *fp = fopen(TICKET_FILE, "r");
+    if (!fp) return -1;
+
+    buffer[0] = '\0';  // pulisci il buffer
+    Ticket t;
+    int count = 0;
+
+    while (fread(&t, sizeof(Ticket), 1, fp)) {
+        if (strcmp(t.username, username) == 0) {
+            char temp[1024];
+            snprintf(temp, sizeof(temp),
+                "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
+                t.id, t.titolo, t.descrizione, t.data_creazione, t.priorita, t.stato, t.agente
+            );
+
+            if (strlen(buffer) + strlen(temp) < max_size) {
+                strcat(buffer, temp);
+                count++;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fclose(fp);
+    return count;
+}
+
+
+int readTicketByIdAndUser(int id, const char *username, Ticket *t) {
+    FILE *fp = fopen(TICKET_FILE, "rb");  // ✅ modalità binaria
+    if (!fp) {
+        perror("Errore apertura tickets.db");
+        return -1;
+    }
+
+    while (fread(t, sizeof(Ticket), 1, fp)) {
+        if (t->id == id && strcmp(t->username, username) == 0) {
+            fclose(fp);
+            return 0;  // trovato
+        }
+    }
+
+    fclose(fp);
+    return -1;  // non trovato o appartiene a un altro utente
+}
+
 
 

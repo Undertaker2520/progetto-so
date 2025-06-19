@@ -7,7 +7,7 @@
 // buildTicketMessage è definita in client.c, la referenziamo qui
 extern void buildTicketMessage(char *dest, int max_length);
 
-void avviaMenuClient(int client_fd) {
+void avviaMenuClient(int client_fd, const char *username) {
     char scelta[10], messaggio[512];
 
     while (1) {
@@ -30,8 +30,8 @@ void avviaMenuClient(int client_fd) {
             printf("Risposta: %s\n", risposta);
 
         } else if (scelta[0] == '2') {
-            printf("\nVisualizzazione di tutti i ticket: \n");
-            strcpy(messaggio, "GET_ALL_TICKETS");
+            printf("\nVisualizzazione di tutti i ticket associati all'utente: \n");
+            snprintf(messaggio, sizeof(messaggio), "GET_ALL_TICKETS|%s", username);
             send(client_fd, messaggio, strlen(messaggio), 0);
 
             char risposta[8192] = {0};
@@ -48,8 +48,9 @@ void avviaMenuClient(int client_fd) {
             fgets(id_input, sizeof(id_input), stdin);
             id_input[strcspn(id_input, "\n")] = 0;
 
-            snprintf(messaggio, sizeof(messaggio), "GET_TICKET_BY_ID|%s", id_input);
+            snprintf(messaggio, sizeof(messaggio), "GET_TICKET_BY_ID|%s|%s", id_input, username);
             send(client_fd, messaggio, strlen(messaggio), 0);
+
 
             char risposta[1024] = {0};
             int bytes = recv(client_fd, risposta, sizeof(risposta) - 1, 0);

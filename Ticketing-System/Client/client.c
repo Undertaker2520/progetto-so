@@ -42,7 +42,7 @@ int main() {
         password[strcspn(password, "\n")] = 0;
 
         char login_msg[256];
-        snprintf(login_msg, sizeof(login_msg), "LOGIN|%s|%s", username);
+        snprintf(login_msg, sizeof(login_msg), "LOGIN|%s|%s", username, password);
         send(client_fd, login_msg, strlen(login_msg), 0);
 
         char login_resp[128];
@@ -78,7 +78,7 @@ int main() {
 
     // Menu Post Login
     if (strcmp(ruolo, "CLIENT") == 0) {
-        avviaMenuClient(client_fd);
+        avviaMenuClient(client_fd, username);
     } else {
         avviaMenuAgente(client_fd);
     }
@@ -129,9 +129,9 @@ void ticketComponentWriter(CampoTicket campo, char *dest, int max_length) {
 }
 
 void buildTicketMessage(char *dest, int max_length) {
-    char titolo[100], descrizione[256], priorita[10];
+    char titolo[100], descrizione[256], priorita[10], username[10];
     ticketComponentWriter(TITOLO, titolo, sizeof(titolo));
     ticketComponentWriter(DESCRIZIONE, descrizione, sizeof(descrizione));
     ticketComponentWriter(PRIORITA, priorita, sizeof(priorita));
-    snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
+    snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s|%s", titolo, descrizione, priorita, username );
 }
