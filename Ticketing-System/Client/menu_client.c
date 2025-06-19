@@ -18,8 +18,9 @@ void avviaMenuClient(int client_fd) {
         printf("0. Esci\n");
         printf("Scelta: ");
         fgets(scelta, sizeof(scelta), stdin);
-
+    
         if (scelta[0] == '1') {
+            printf("\nInserimento nuovo ticket:\n");
             memset(messaggio, 0, sizeof(messaggio));
             buildTicketMessage(messaggio, sizeof(messaggio));
             send(client_fd, messaggio, strlen(messaggio), 0);
@@ -29,6 +30,7 @@ void avviaMenuClient(int client_fd) {
             printf("Risposta: %s\n", risposta);
 
         } else if (scelta[0] == '2') {
+            printf("\nVisualizzazione di tutti i ticket: \n");
             strcpy(messaggio, "GET_ALL_TICKETS");
             send(client_fd, messaggio, strlen(messaggio), 0);
 
@@ -40,6 +42,7 @@ void avviaMenuClient(int client_fd) {
             }
 
         } else if (scelta[0] == '3') {
+            printf("\nCerca un ticket per ID: \n");
             char id_input[10];
             printf("Inserisci ID: ");
             fgets(id_input, sizeof(id_input), stdin);

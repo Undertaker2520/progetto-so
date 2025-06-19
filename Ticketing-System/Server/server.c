@@ -19,7 +19,7 @@ int createNewTicket(const char *buffer);
 void handleGetAllTickets(int socket);
 void handleGetTicketById(int socket, const char *buffer);
 void handleNewTicket(int socket, const char *buffer);
-void handleLogin(int socket, const char *buffer);
+int handleLogin(int socket, const char *buffer);
 int authenticateUser(const char *username, const char *password, char *ruolo);
 
 
@@ -32,10 +32,10 @@ typedef enum {
 } CommandType;
 
 CommandType parseCommand(const char *buffer) {
-    if (strncmp(buffer, "NEW_TICKET|", 11) == 0) return CMD_NEW_TICKET;
-    if (strncmp(buffer, "GET_ALL_TICKETS", 15) == 0) return CMD_GET_ALL;
-    if (strncmp(buffer, "GET_TICKET_BY_ID|", 17) == 0) return CMD_GET_BY_ID;
-    if (strncmp(buffer, "LOGIN|", 6) == 0) return CMD_LOGIN;
+    if (strncmp(buffer, "NEW_TICKET|", strlen("NEW_TICKET|")) == 0) return CMD_NEW_TICKET;
+    if (strncmp(buffer, "GET_ALL_TICKETS", strlen("GET_ALL_TICKETS")) == 0) return CMD_GET_ALL;
+    if (strncmp(buffer, "GET_TICKET_BY_ID|", strlen("GET_TICKET_BY_ID|")) == 0) return CMD_GET_BY_ID;
+    if (strncmp(buffer, "LOGIN|", strlen("LOGIN")) == 0) return CMD_LOGIN;
     return CMD_UNKNOWN;
 }
 
@@ -69,12 +69,30 @@ int main(){
         // Accetta una connessione in arrivo
         acceptConnections(server_fd, &new_socket);
 
-        // Gestisce la richiesta del client e invia risposta
-        while (1) {
+        pid_t pid = fork(); // Crea un processo figlio per gestire il client
+        if (pid < 0) {
+            perror("Fork failed");
+            close(new_socket); 
+            continue; // Continua ad accettare nuove connessioni
+        } else if (pid == 0) {  
+            // Processo figlio: gestisce la connessione del client
+            close(server_fd); // Il figlio non ha bisogno del socket del server
+            while (1) {
             if (handleClientRequest(new_socket) == 0) {
-                break; // client ha chiuso la connessione o ha inviato un comando di uscita
+                    break; // client ha chiuso la connessione o ha inviato un comando di uscita
+                }
             }
+            close(new_socket); // Chiude il socket del client
+            printf("Connessione con il client chiusa.\n");
+            exit(0); // Termina il processo figlio
+        } else {
+            // Processo padre: continua ad accettare nuove connessioni
+            close(new_socket); // Il padre non ha bisogno del socket del client
+            continue;
         }
+
+        // Gestisce la richiesta del client e invia risposta
+        
 
         // Chiude la connessione con il client
         close(new_socket);
@@ -143,25 +161,30 @@ int handleClientRequest(int socket) {
     buffer[bytes_read] = '\0'; // Assicura fine stringa
     printf("Messaggio ricevuto: %s\n", buffer);
 
-    int response;
     switch (parseCommand(buffer)) {
         case CMD_NEW_TICKET:
             handleNewTicket(socket, buffer);
             break;
         case CMD_GET_ALL:
+            printf("Ricevuto comando GET_ALL_TICKETS\n");
             handleGetAllTickets(socket);
             break;
         case CMD_GET_BY_ID:
             handleGetTicketById(socket, buffer);
             break;
         case CMD_LOGIN:
-            handleLogin(socket, buffer);
-        break;
+            int login_result = handleLogin(socket, buffer);
+            if (login_result == 0) {
+                return 0; // chiudi la connessione
+            }
+            break;
         default:
+            printf("Comando sconosciuto ricevuto.\n");
             send(socket, "ERR|Comando sconosciuto", 24, 0);
             break;
     }
-    return 1;
+    return 1; // continua a gestire le richieste
+
 }
 
 void handleGetAllTickets(int socket) {
@@ -217,7 +240,7 @@ void handleNewTicket(int socket, const char *buffer) {
 }
 
 
-void handleLogin(int socket, const char *buffer) {
+int handleLogin(int socket, const char *buffer) {
     char temp[128];
     strncpy(temp, buffer, sizeof(temp));
     temp[sizeof(temp) - 1] = '\0';
@@ -227,19 +250,30 @@ void handleLogin(int socket, const char *buffer) {
 
     if (!username || !password) {
         send(socket, "ERR|Formato: LOGIN|username|password", 37, 0);
-        return;
+        return -1;
     }
 
     char ruolo[20];
-    int result = authenticateUser(username, password, ruolo);
-
-    if (result == 1) {
-        char risposta[64];
-        snprintf(risposta, sizeof(risposta), "OK|Login riuscito|%s", ruolo);
-        send(socket, risposta, strlen(risposta), 0);
-    } else if (result == 0) {
-        send(socket, "ERR|Credenziali non valide", 27, 0);
-    } else {
-        send(socket, "ERR|Errore accesso file utenti", 30, 0);
+    int attempts = 0;
+    while (attempts < 3) {
+        int result = authenticateUser(username, password, ruolo);
+        switch(result){
+            case 0:
+                attempts++;
+                send(socket, "ERR|Credenziali non valide", 27, 0);
+                return 1; // errore ma non grave, client può riprovare
+            case -1:
+                send(socket, "ERR|Errore accesso file utenti", 30, 0);
+                return 0; // errore lettura file, chiudi connessione
+            default:
+                char risposta[64];
+                snprintf(risposta, sizeof(risposta), "OK|Login riuscito|%s", ruolo);
+                send(socket, risposta, strlen(risposta), 0);
+                return 1;  // login riuscito
+        }
     }
+
+    // se piu di 3 tentativi chiudo la connessione
+    send(socket, "ERR|Login fallito dopo 3 tentativi", 34, 0);
+    return 0;
 }
