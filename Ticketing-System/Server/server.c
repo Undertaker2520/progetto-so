@@ -11,7 +11,6 @@
 #define BUF_SIZE 1024
 #define MAX_CLIENTS 100
 
-
 void createSocket(int *server_fd);
 void configureAddress(struct sockaddr_in *address);
 void binding(int server_fd, struct sockaddr *address, socklen_t addrlen);
@@ -25,19 +24,18 @@ int authenticateUser(const char *username, const char *password, char *ruolo);
 void salvaSessione(int socket_fd, const char *username);
 const char* getUsernameBySocket(int socket_fd);
 
-
 typedef enum {
     CMD_NEW_TICKET,
-    CMD_GET_ALL,
-    CMD_GET_BY_ID,
+    CMD_GET_ALL_BY_USER,
+    CMD_GET_BY_ID_BY_USER,
     CMD_UNKNOWN,
     CMD_LOGIN
 } CommandType;
 
 CommandType parseCommand(const char *buffer) {
     if (strncmp(buffer, "NEW_TICKET|", strlen("NEW_TICKET|")) == 0) return CMD_NEW_TICKET;
-    if (strncmp(buffer, "GET_ALL_TICKETS|", strlen("GET_ALL_TICKETS|")) == 0) return CMD_GET_ALL;
-    if (strncmp(buffer, "GET_TICKET_BY_ID|", strlen("GET_TICKET_BY_ID|")) == 0) return CMD_GET_BY_ID;
+    if (strncmp(buffer, "GET_ALL_TICKETS_BY_USER|", strlen("GET_ALL_TICKETS_BY_USER|")) == 0) return CMD_GET_ALL_BY_USER;
+    if (strncmp(buffer, "GET_TICKET_BY_ID_AND_USER|", strlen("GET_TICKET_BY_ID_AND_USER|")) == 0) return CMD_GET_BY_ID_BY_USER;
     if (strncmp(buffer, "LOGIN|", strlen("LOGIN")) == 0) return CMD_LOGIN;
     return CMD_UNKNOWN;
 }
@@ -100,10 +98,7 @@ int main(){
             close(new_socket); // Il padre non ha bisogno del socket del client
             continue;
         }
-
-        // Gestisce la richiesta del client e invia risposta
         
-
         // Chiude la connessione con il client
         close(new_socket);
 
@@ -175,11 +170,12 @@ int handleClientRequest(int socket) {
         case CMD_NEW_TICKET:
             handleNewTicket(socket, buffer);
             break;
-        case CMD_GET_ALL:
-            printf("Ricevuto comando GET_ALL_TICKETS\n");
+        case CMD_GET_ALL_BY_USER:
+            printf("Ricevuto comando GET_ALL_TICKETS_BY_USER\n");
             handleGetAllTicketsByLoggedUser(socket, buffer);
             break;
-        case CMD_GET_BY_ID:
+        case CMD_GET_BY_ID_BY_USER:
+            printf("Ricevuto comando GET_TICKET_BY_ID_AND_USER\n");
             handleGetTicketByIdAndLoggedUser(socket, buffer);
             break;
         case CMD_LOGIN:
@@ -200,7 +196,7 @@ int handleClientRequest(int socket) {
 }
 
 void handleGetAllTicketsByLoggedUser(int socket, const char *buffer) {
-    const char *username = buffer + strlen("GET_ALL_TICKETS|");
+    const char *username = buffer + strlen("GET_ALL_TICKETS_BY_USER|");
     char ticket_buffer[8192]; 
     int num_tickets = getTicketsByUser(username, ticket_buffer, sizeof(ticket_buffer));
 
@@ -225,7 +221,7 @@ void handleGetTicketByIdAndLoggedUser(int socket, const char *buffer) {
     strncpy(copy, buffer, sizeof(copy));
     copy[sizeof(copy)-1] = '\0';
 
-    char *token = strtok(copy + strlen("GET_TICKET_BY_ID|"), "|");
+    char *token = strtok(copy + strlen("GET_TICKET_BY_ID_AND_USER|"), "|");
     char *username = strtok(NULL, "|");
     if (!token || !username) {
         send(socket, "ERR|Formato comando non valido", 30, 0);
