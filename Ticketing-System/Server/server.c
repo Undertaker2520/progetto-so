@@ -239,7 +239,7 @@ void handleGetTicketByIdAndLoggedUser(int socket, const char *buffer) {
         char risposta[1024];
         snprintf(risposta, sizeof(risposta),
             "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n",
-            t.id, t.titolo, t.descrizione, t.data_creazione, t.priorita, t.stato, t.agente
+            t.id, t.titolo, t.descrizione, t.data_creazione,prioritaToString(t.priorita), statoToString(t.stato), t.agente
         );
         send(socket, risposta, strlen(risposta), 0);
     } else {

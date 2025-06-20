@@ -3,7 +3,7 @@
 #include "auth.h"
 #include <sys/socket.h>
 
-#define USER_FILE "users.txt"
+#define USER_FILE "../Authentication/users.txt"
 
 int authenticateUser(const char *username, const char *password, char *ruolo) {
     FILE *file = fopen(USER_FILE, "r");

@@ -120,7 +120,7 @@ void ticketComponentWriter(CampoTicket campo, char *dest, int max_length) {
     fgets(input, sizeof(input), stdin);
     input[strcspn(input, "\n")] = 0;
 
-    if (strlen(input) > max_length) {
+    if (strlen(input) > (size_t)max_length) {
         fprintf(stderr, "Errore: Il %s supera la lunghezza massima di %d caratteri.\n", nome_campo, max_length);
         exit(EXIT_FAILURE);
     }

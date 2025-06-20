@@ -5,9 +5,8 @@
 #include "ticket.h"
 #include <sys/socket.h>
 
-
 // Percorso file con ticket
-#define TICKET_FILE "tickets.db"
+#define TICKET_FILE "../tickets.db"
 
 //generazione nuovo ID leggendo da file
 int generateNewTicketId() {
@@ -72,10 +71,10 @@ int parse_ticket_string(const char *s, Ticket *t) {
     strncpy(t->data_creazione, tok, sizeof(t->data_creazione)-1);
 
     tok = strtok(NULL, "|"); if (!tok) return -1;
-    strncpy(t->priorita, tok, sizeof(t->priorita)-1);
+    t->priorita = stringToPriorita(tok);
 
     tok = strtok(NULL, "|"); if (!tok) return -1;
-    strncpy(t->stato, tok, sizeof(t->stato)-1);
+     t->stato = stringToStato(tok);
 
     tok = strtok(NULL, "|"); if (!tok) return -1;
     strncpy(t->agente, tok, sizeof(t->agente)-1);
@@ -122,8 +121,8 @@ int getAllTickets(char *buffer, size_t bufsize) {
             ticket.titolo,
             ticket.descrizione,
             ticket.data_creazione,
-            ticket.priorita,
-            ticket.stato,
+            prioritaToString(ticket.priorita),
+            statoToString(ticket.stato),
             ticket.agente
         );
 
@@ -164,8 +163,8 @@ int createNewTicket(const char *buffer, const char *username){
         strncpy(t.titolo, titolo, sizeof(t.titolo) - 1);
         strncpy(t.descrizione, descrizione, sizeof(t.descrizione) - 1);
         getCurrentDate(t.data_creazione);
-        strncpy(t.priorita, priorita, sizeof(t.priorita) - 1);
-        strncpy(t.stato, "Aperto", sizeof(t.stato) - 1);
+        t.priorita = stringToPriorita(priorita);
+        t.stato = STATO_APERTO;
         strncpy(t.agente, "nessuno", sizeof(t.agente) - 1);
         strncpy(t.username, username, sizeof(t.username) - 1);
 
@@ -188,8 +187,7 @@ int getTicketsByUser(const char *username, char *buffer, size_t max_size) {
             char temp[1024];
             snprintf(temp, sizeof(temp),
                 "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
-                t.id, t.titolo, t.descrizione, t.data_creazione, t.priorita, t.stato, t.agente
-            );
+                t.id, t.titolo, t.descrizione, t.data_creazione, prioritaToString(t.priorita), statoToString(t.stato), t.agente);
 
             if (strlen(buffer) + strlen(temp) < max_size) {
                 strcat(buffer, temp);
@@ -221,6 +219,38 @@ int readTicketByIdAndUser(int id, const char *username, Ticket *t) {
 
     fclose(fp);
     return -1;  // non trovato o appartiene a un altro utente
+}
+
+const char* prioritaToString(Priorita p) {
+    switch (p) {
+        case PRIORITA_ALTA: return "Alta";
+        case PRIORITA_MEDIA: return "Media";
+        case PRIORITA_BASSA: return "Bassa";
+        default: return "Sconosciuta";
+    }
+}
+
+const char* statoToString(Stato s) {
+    switch (s) {
+        case STATO_APERTO: return "Aperto";
+        case STATO_IN_CORSO: return "In Corso";
+        case STATO_CHIUSO: return "Chiuso";
+        default: return "Sconosciuto";
+    }
+}
+
+Priorita stringToPriorita(const char *s) {
+    if (strcasecmp(s, "Alta") == 0) return PRIORITA_ALTA;
+    if (strcasecmp(s, "Media") == 0) return PRIORITA_MEDIA;
+    if (strcasecmp(s, "Bassa") == 0) return PRIORITA_BASSA;
+    return PRIORITA_BASSA; // default
+}
+
+Stato stringToStato(const char *s) {
+    if (strcasecmp(s, "Aperto") == 0) return STATO_APERTO;
+    if (strcasecmp(s, "In Corso") == 0) return STATO_IN_CORSO;
+    if (strcasecmp(s, "Chiuso") == 0) return STATO_CHIUSO;
+    return STATO_APERTO; // default
 }
 
 

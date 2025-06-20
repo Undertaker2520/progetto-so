@@ -17,7 +17,7 @@ void avviaMenuAgente(int client_fd) {
         fgets(scelta, sizeof(scelta), stdin);
 
         if (scelta[0] == '1') {
-            strcpy(messaggio, "GET_ALL_TICKETS");
+            strcpy(messaggio, "GET_ALL_TICKETS|");
             send(client_fd, messaggio, strlen(messaggio), 0);
 
             char risposta[8192] = {0};
