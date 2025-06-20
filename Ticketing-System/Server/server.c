@@ -23,11 +23,15 @@ int handleLogin(int socket, const char *buffer);
 int authenticateUser(const char *username, const char *password, char *ruolo);
 void salvaSessione(int socket_fd, const char *username);
 const char* getUsernameBySocket(int socket_fd);
+void handleSearchByFieldByUser(int socket, const char *buffer, char *field);
 
 typedef enum {
     CMD_NEW_TICKET,
     CMD_GET_ALL_BY_USER,
     CMD_GET_BY_ID_BY_USER,
+    CMD_BY_TITOLO_BY_USER,
+    CMD_BY_DESCRIZIONE_BY_USER,
+    CMD_BY_STATO_BY_USER,
     CMD_UNKNOWN,
     CMD_LOGIN
 } CommandType;
@@ -36,6 +40,9 @@ CommandType parseCommand(const char *buffer) {
     if (strncmp(buffer, "NEW_TICKET|", strlen("NEW_TICKET|")) == 0) return CMD_NEW_TICKET;
     if (strncmp(buffer, "GET_ALL_TICKETS_BY_USER|", strlen("GET_ALL_TICKETS_BY_USER|")) == 0) return CMD_GET_ALL_BY_USER;
     if (strncmp(buffer, "GET_TICKET_BY_ID_AND_USER|", strlen("GET_TICKET_BY_ID_AND_USER|")) == 0) return CMD_GET_BY_ID_BY_USER;
+    if (strncmp(buffer, "GET_TICKET_BY_TITOLO_BY_USER|", strlen("GET_TICKET_BY_TITOLO|")) == 0) return CMD_BY_TITOLO_BY_USER;
+    if (strncmp(buffer, "GET_TICKET_BY_DESCRIZIONE_BY_USER|", strlen("GET_TICKET_BY_DESCRIZIONE|")) == 0) return CMD_BY_DESCRIZIONE_BY_USER;
+    if (strncmp(buffer, "GET_TICKET_BY_STATO_BY_USER|", strlen("GET_TICKET_BY_STATO|")) == 0) return CMD_BY_STATO_BY_USER;
     if (strncmp(buffer, "LOGIN|", strlen("LOGIN")) == 0) return CMD_LOGIN;
     return CMD_UNKNOWN;
 }
@@ -177,6 +184,18 @@ int handleClientRequest(int socket) {
         case CMD_GET_BY_ID_BY_USER:
             printf("Ricevuto comando GET_TICKET_BY_ID_AND_USER\n");
             handleGetTicketByIdAndLoggedUser(socket, buffer);
+            break;
+        case CMD_BY_TITOLO_BY_USER:
+            printf("Ricevuto comando GET_TICKET_BY_TITOLO_BY_USER\n");
+            handleSearchByFieldByUser(socket, buffer, "GET_TICKET_BY_TITOLO_BY_USER|");
+            break;
+        case CMD_BY_DESCRIZIONE_BY_USER:
+            printf("Ricevuto comando GET_TICKET_BY_DESCRIZIONE_BY_USER\n");
+            handleSearchByFieldByUser(socket, buffer, "GET_TICKET_BY_DESCRIZIONE_BY_USER|");
+            break;
+        case CMD_BY_STATO_BY_USER:
+            printf("Ricevuto comando GET_TICKET_BY_STATO_BY_USER\n");
+            handleSearchByFieldByUser(socket, buffer, "GET_TICKET_BY_STATO_BY_USER|");
             break;
         case CMD_LOGIN:
             int login_result = handleLogin(socket, buffer);
@@ -326,4 +345,26 @@ const char* getUsernameBySocket(int socket_fd) {
         }
     }
     return NULL;
+}
+
+void handleSearchByFieldByUser(int socket, const char *buffer, char *field) {
+    char keyword[128], username[64];
+    sscanf(buffer + strlen(field), "%127[^|]|%63s", keyword, username);
+
+    char out[4096];
+    int result = 0;
+    if (strcmp(field, "GET_TICKET_BY_TITOLO_BY_USER|") == 0) {
+        result = searchTicketsByTitoloByUser(username, keyword, out, sizeof(out));
+    } else if (strcmp(field, "GET_TICKET_BY_DESCRIZIONE_BY_USER|") == 0) {
+        result = searchTicketsByDescrizioneByUser(username, keyword, out, sizeof(out));
+    } else if (strcmp(field, "GET_TICKET_BY_STATO_BY_USER|") == 0) {
+        result = searchTicketsByStatoByUser(username, keyword, out, sizeof(out));
+    } else {
+        send(socket, "ERR|Campo di ricerca non valido", 31, 0);
+        return;
+    }
+    if (result <= 0)
+        send(socket, "ERR|Nessun risultato trovato", 28, 0);
+    else
+        send(socket, out, strlen(out), 0);
 }

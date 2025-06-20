@@ -252,5 +252,80 @@ Stato stringToStato(const char *s) {
     return STATO_APERTO; // default
 }
 
+int searchTicketsByTitoloByUser(const char *username, const char *keyword, char *buffer, size_t max_size) {
+    FILE *file = fopen(TICKET_FILE, "rb");
+    if (!file) return -1;
 
+    buffer[0] = '\0';
+    Ticket t;
+    int count = 0;
 
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (strcmp(t.username, username) == 0 && strstr(t.titolo, keyword)) {
+            char temp[512];
+            snprintf(temp, sizeof(temp),
+                     "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
+                     t.id, t.titolo, t.descrizione, t.data_creazione,
+                     prioritaToString(t.priorita), statoToString(t.stato), t.agente);
+            if (strlen(buffer) + strlen(temp) < max_size) {
+                strcat(buffer, temp);
+                count++;
+            }
+        }
+    }
+
+    fclose(file);
+    return count;
+}
+
+int searchTicketsByDescrizioneByUser(const char *username, const char *keyword, char *buffer, size_t max_size) {
+    FILE *file = fopen(TICKET_FILE, "rb");
+    if (!file) return -1;
+
+    buffer[0] = '\0';
+    Ticket t;
+    int count = 0;
+
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (strcmp(t.username, username) == 0 && strstr(t.descrizione, keyword)) {
+            char temp[512];
+            snprintf(temp, sizeof(temp),
+                     "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
+                     t.id, t.titolo, t.descrizione, t.data_creazione,
+                     prioritaToString(t.priorita), statoToString(t.stato), t.agente);
+            if (strlen(buffer) + strlen(temp) < max_size) {
+                strcat(buffer, temp);
+                count++;
+            }
+        }
+    }
+
+    fclose(file);
+    return count;
+}
+
+int searchTicketsByStatoByUser(const char *username, const char *stato, char *buffer, size_t max_size) {
+    FILE *file = fopen(TICKET_FILE, "rb");
+    if (!file) return -1;
+
+    buffer[0] = '\0';
+    Ticket t;
+    int count = 0;
+
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (strcmp(t.username, username) == 0 && strcmp(statoToString(t.stato), stato) == 0) {
+            char temp[512];
+            snprintf(temp, sizeof(temp),
+                     "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
+                     t.id, t.titolo, t.descrizione, t.data_creazione,
+                     prioritaToString(t.priorita), statoToString(t.stato), t.agente);
+            if (strlen(buffer) + strlen(temp) < max_size) {
+                strcat(buffer, temp);
+                count++;
+            }
+        }
+    }
+
+    fclose(file);
+    return count;
+}

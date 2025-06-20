@@ -35,6 +35,9 @@ int getAllTickets(char *buffer, size_t bufsize);
 int getTicketsByUser(const char *username, char *buffer, size_t bufsize);
 int readTicketByIdAndUser(int id, const char *username, Ticket *ticket);
 int createNewTicket(const char *buffer, const char *username);
+int searchTicketsByTitoloByUser(const char *username, const char *keyword, char *buffer, size_t max_size);
+int searchTicketsByDescrizioneByUser(const char *username, const char *keyword, char *buffer, size_t max_size);
+int searchTicketsByStatoByUser(const char *username, const char *stato, char *buffer, size_t max_size);
 
 const char* prioritaToString(Priorita p);
 const char* statoToString(Stato s);
