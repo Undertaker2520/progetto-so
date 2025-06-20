@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 
 // Percorso file con ticket
-#define TICKET_FILE "../tickets.db"
+#define TICKET_FILE "tickets.db"
 
 //generazione nuovo ID leggendo da file
 int generateNewTicketId() {
@@ -14,7 +14,6 @@ int generateNewTicketId() {
     if (!file) {
         return 1; // Se il file non esiste, inizia da 1
     }
-
     int id = 0;
     Ticket ticket;
     while (fread(&ticket, sizeof(Ticket), 1, file)) {
