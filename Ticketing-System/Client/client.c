@@ -78,11 +78,10 @@ int main() {
 
     // Menu Post Login
     if (strcmp(ruolo, "CLIENT") == 0) {
-        avviaMenuClient(client_fd, username);
+        startClientMenu(client_fd, username);
     } else {
-        avviaMenuAgente(client_fd);
+        startAgentMenu(client_fd);
     }
-
     return 0;
 }
 
@@ -129,9 +128,10 @@ void ticketComponentWriter(CampoTicket campo, char *dest, int max_length) {
 }
 
 void buildTicketMessage(char *dest, int max_length) {
-    char titolo[100], descrizione[256], priorita[10], username[10];
+    char titolo[100], descrizione[256], priorita[10];
     ticketComponentWriter(TITOLO, titolo, sizeof(titolo));
     ticketComponentWriter(DESCRIZIONE, descrizione, sizeof(descrizione));
     ticketComponentWriter(PRIORITA, priorita, sizeof(priorita));
-    snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s|%s", titolo, descrizione, priorita, username );
+    snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
 }
+

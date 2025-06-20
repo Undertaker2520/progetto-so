@@ -11,6 +11,7 @@
 #define BUF_SIZE 1024
 #define MAX_CLIENTS 100
 
+
 void createSocket(int *server_fd);
 void configureAddress(struct sockaddr_in *address);
 void binding(int server_fd, struct sockaddr *address, socklen_t addrlen);
@@ -23,7 +24,8 @@ int handleLogin(int socket, const char *buffer);
 int authenticateUser(const char *username, const char *password, char *ruolo);
 void salvaSessione(int socket_fd, const char *username);
 const char* getUsernameBySocket(int socket_fd);
-void handleSearchByFieldByUser(int socket, const char *buffer, char *field);
+void handleSearchByFieldByUser(int socket, const char *buffer, CampoRicerca campo);
+void handleUpdateTicket(int socket, const char *buffer);
 
 typedef enum {
     CMD_NEW_TICKET,
@@ -33,6 +35,7 @@ typedef enum {
     CMD_BY_DESCRIZIONE_BY_USER,
     CMD_BY_STATO_BY_USER,
     CMD_UNKNOWN,
+    CMD_UPDATE_YOUR_TICKET,
     CMD_LOGIN
 } CommandType;
 
@@ -40,9 +43,11 @@ CommandType parseCommand(const char *buffer) {
     if (strncmp(buffer, "NEW_TICKET|", strlen("NEW_TICKET|")) == 0) return CMD_NEW_TICKET;
     if (strncmp(buffer, "GET_ALL_TICKETS_BY_USER|", strlen("GET_ALL_TICKETS_BY_USER|")) == 0) return CMD_GET_ALL_BY_USER;
     if (strncmp(buffer, "GET_TICKET_BY_ID_AND_USER|", strlen("GET_TICKET_BY_ID_AND_USER|")) == 0) return CMD_GET_BY_ID_BY_USER;
-    if (strncmp(buffer, "GET_TICKET_BY_TITOLO_BY_USER|", strlen("GET_TICKET_BY_TITOLO|")) == 0) return CMD_BY_TITOLO_BY_USER;
-    if (strncmp(buffer, "GET_TICKET_BY_DESCRIZIONE_BY_USER|", strlen("GET_TICKET_BY_DESCRIZIONE|")) == 0) return CMD_BY_DESCRIZIONE_BY_USER;
-    if (strncmp(buffer, "GET_TICKET_BY_STATO_BY_USER|", strlen("GET_TICKET_BY_STATO|")) == 0) return CMD_BY_STATO_BY_USER;
+    if (strncmp(buffer, "GET_TICKET_BY_TITOLO_BY_USER|", strlen("GET_TICKET_BY_TITOLO_BY_USER|")) == 0) return CMD_BY_TITOLO_BY_USER;
+    if (strncmp(buffer, "GET_TICKET_BY_DESCRIZIONE_BY_USER|", strlen("GET_TICKET_BY_DESCRIZIONE_BY_USER|")) == 0) return CMD_BY_DESCRIZIONE_BY_USER;
+    if (strncmp(buffer, "GET_TICKET_BY_STATO_BY_USER|", strlen("GET_TICKET_BY_STATO_BY_USER|")) == 0) return CMD_BY_STATO_BY_USER;
+    if (strncmp(buffer, "UPDATE_YOUR_TICKET|", strlen("UPDATE_YOUR_TICKET|")) == 0) return CMD_UPDATE_YOUR_TICKET;
+
     if (strncmp(buffer, "LOGIN|", strlen("LOGIN")) == 0) return CMD_LOGIN;
     return CMD_UNKNOWN;
 }
@@ -163,55 +168,48 @@ void acceptConnections(int server_fd, int *new_socket) {
 
 int handleClientRequest(int socket) {
     char buffer[1024] = {0};
-
     int bytes_read = read(socket, buffer, BUF_SIZE);
     if (bytes_read <= 0) {
         perror("Read failed o connessione chiusa");
-        return 0; // interrompe la connessione
+        return 0;
     }
 
-    buffer[bytes_read] = '\0'; // Assicura fine stringa
+    buffer[bytes_read] = '\0';
     printf("Messaggio ricevuto: %s\n", buffer);
 
+    CommandType cmd = parseCommand(buffer);
     switch (parseCommand(buffer)) {
         case CMD_NEW_TICKET:
             handleNewTicket(socket, buffer);
             break;
         case CMD_GET_ALL_BY_USER:
-            printf("Ricevuto comando GET_ALL_TICKETS_BY_USER\n");
             handleGetAllTicketsByLoggedUser(socket, buffer);
             break;
         case CMD_GET_BY_ID_BY_USER:
-            printf("Ricevuto comando GET_TICKET_BY_ID_AND_USER\n");
             handleGetTicketByIdAndLoggedUser(socket, buffer);
             break;
         case CMD_BY_TITOLO_BY_USER:
-            printf("Ricevuto comando GET_TICKET_BY_TITOLO_BY_USER\n");
-            handleSearchByFieldByUser(socket, buffer, "GET_TICKET_BY_TITOLO_BY_USER|");
+            handleSearchByFieldByUser(socket, buffer, FIELD_TITOLO);
             break;
         case CMD_BY_DESCRIZIONE_BY_USER:
-            printf("Ricevuto comando GET_TICKET_BY_DESCRIZIONE_BY_USER\n");
-            handleSearchByFieldByUser(socket, buffer, "GET_TICKET_BY_DESCRIZIONE_BY_USER|");
+            handleSearchByFieldByUser(socket, buffer, FIELD_DESCRIZIONE);
             break;
         case CMD_BY_STATO_BY_USER:
-            printf("Ricevuto comando GET_TICKET_BY_STATO_BY_USER\n");
-            handleSearchByFieldByUser(socket, buffer, "GET_TICKET_BY_STATO_BY_USER|");
+            handleSearchByFieldByUser(socket, buffer, FIELD_STATO);
             break;
         case CMD_LOGIN:
-            int login_result = handleLogin(socket, buffer);
-            
-
-            if (login_result == 0) {
-                return 0; // chiudi la connessione
-            }
+            if (handleLogin(socket, buffer) == 0)
+                return 0;
+            break;
+        case CMD_UPDATE_YOUR_TICKET:
+            handleUpdateTicket(socket, buffer);
             break;
         default:
-            printf("Comando sconosciuto ricevuto.\n");
             send(socket, "ERR|Comando sconosciuto", 24, 0);
             break;
     }
-    return 1; // continua a gestire le richieste
 
+    return 1;
 }
 
 void handleGetAllTicketsByLoggedUser(int socket, const char *buffer) {
@@ -347,24 +345,49 @@ const char* getUsernameBySocket(int socket_fd) {
     return NULL;
 }
 
-void handleSearchByFieldByUser(int socket, const char *buffer, char *field) {
+void handleSearchByFieldByUser(int socket, const char *buffer, CampoRicerca campo) {
     char keyword[128], username[64];
-    sscanf(buffer + strlen(field), "%127[^|]|%63s", keyword, username);
+
+    // la lunghezza del prefisso cambia in base al campo
+    const char *prefixes[] = {
+        "GET_TICKET_BY_TITOLO_BY_USER|",
+        "GET_TICKET_BY_DESCRIZIONE_BY_USER|",
+        "GET_TICKET_BY_STATO_BY_USER|"
+    };
+
+    sscanf(buffer + strlen(prefixes[campo]), "%127[^|]|%63s", keyword, username);
 
     char out[4096];
-    int result = 0;
-    if (strcmp(field, "GET_TICKET_BY_TITOLO_BY_USER|") == 0) {
-        result = searchTicketsByTitoloByUser(username, keyword, out, sizeof(out));
-    } else if (strcmp(field, "GET_TICKET_BY_DESCRIZIONE_BY_USER|") == 0) {
-        result = searchTicketsByDescrizioneByUser(username, keyword, out, sizeof(out));
-    } else if (strcmp(field, "GET_TICKET_BY_STATO_BY_USER|") == 0) {
-        result = searchTicketsByStatoByUser(username, keyword, out, sizeof(out));
-    } else {
-        send(socket, "ERR|Campo di ricerca non valido", 31, 0);
-        return;
-    }
+    int result = searchTicketsByFieldByUser(username, keyword, campo, out, sizeof(out));
+
     if (result <= 0)
         send(socket, "ERR|Nessun risultato trovato", 28, 0);
     else
         send(socket, out, strlen(out), 0);
 }
+
+void handleUpdateTicket(int socket, const char *buffer) {
+    char copy[512];
+    strncpy(copy, buffer, sizeof(copy));
+    copy[sizeof(copy) - 1] = '\0';
+
+    char *id_str = strtok(copy + strlen("UPDATE_YOUR_TICKET|"), "|");
+    char *nuovo_titolo = strtok(NULL, "|");
+    char *nuova_descrizione = strtok(NULL, "|");
+    const char *username = getUsernameBySocket(socket);
+
+    if (!id_str || !nuovo_titolo || !nuova_descrizione || !username) {
+        send(socket, "ERR|Formato comando non valido", 30, 0);
+        return;
+    }
+
+    int id = atoi(id_str);
+    int result = updateDescriptionAndTitle(id, username, nuovo_titolo, nuova_descrizione);
+    if (result == 0)
+        send(socket, "OK|Modifica completata", 23, 0);
+    else if (result == -2)
+        send(socket, "ERR|Non autorizzato: il ticket non ti appartiene", 48, 0);
+    else
+        send(socket, "ERR|Modifica fallita", 21, 0);
+}
+

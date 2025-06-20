@@ -166,6 +166,8 @@ int createNewTicket(const char *buffer, const char *username){
         t.stato = STATO_APERTO;
         strncpy(t.agente, "nessuno", sizeof(t.agente) - 1);
         strncpy(t.username, username, sizeof(t.username) - 1);
+        t.username[sizeof(t.username) - 1] = '\0';//mi assicuro che user non venga salvato con caratteri extra
+
 
         return saveTicket(&t) == 0 ? t.id : -1;
     }
@@ -252,7 +254,8 @@ Stato stringToStato(const char *s) {
     return STATO_APERTO; // default
 }
 
-int searchTicketsByTitoloByUser(const char *username, const char *keyword, char *buffer, size_t max_size) {
+
+int searchTicketsByFieldByUser(const char *username, const char *keyword, CampoRicerca campo, char *buffer, size_t max_size) {
     FILE *file = fopen(TICKET_FILE, "rb");
     if (!file) return -1;
 
@@ -261,15 +264,29 @@ int searchTicketsByTitoloByUser(const char *username, const char *keyword, char 
     int count = 0;
 
     while (fread(&t, sizeof(Ticket), 1, file)) {
-        if (strcmp(t.username, username) == 0 && strstr(t.titolo, keyword)) {
+        if (strcmp(t.username, username) != 0) continue;
+
+        int match = 0;
+        switch (campo) {
+            case FIELD_TITOLO:
+                match = strstr(t.titolo, keyword) != NULL;
+                break;
+            case FIELD_DESCRIZIONE:
+                match = strstr(t.descrizione, keyword) != NULL;
+                break;
+            case FIELD_STATO:
+                match = strcmp(statoToString(t.stato), keyword) == 0;
+                break;
+        }
+
+        if (match) {
             char temp[512];
-            snprintf(temp, sizeof(temp),
-                     "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
-                     t.id, t.titolo, t.descrizione, t.data_creazione,
-                     prioritaToString(t.priorita), statoToString(t.stato), t.agente);
+            formatTicket(&t, temp, sizeof(temp));
             if (strlen(buffer) + strlen(temp) < max_size) {
                 strcat(buffer, temp);
                 count++;
+            } else {
+                break;
             }
         }
     }
@@ -278,54 +295,52 @@ int searchTicketsByTitoloByUser(const char *username, const char *keyword, char 
     return count;
 }
 
-int searchTicketsByDescrizioneByUser(const char *username, const char *keyword, char *buffer, size_t max_size) {
-    FILE *file = fopen(TICKET_FILE, "rb");
-    if (!file) return -1;
-
-    buffer[0] = '\0';
-    Ticket t;
-    int count = 0;
-
-    while (fread(&t, sizeof(Ticket), 1, file)) {
-        if (strcmp(t.username, username) == 0 && strstr(t.descrizione, keyword)) {
-            char temp[512];
-            snprintf(temp, sizeof(temp),
-                     "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
-                     t.id, t.titolo, t.descrizione, t.data_creazione,
-                     prioritaToString(t.priorita), statoToString(t.stato), t.agente);
-            if (strlen(buffer) + strlen(temp) < max_size) {
-                strcat(buffer, temp);
-                count++;
-            }
-        }
-    }
-
-    fclose(file);
-    return count;
+void formatTicket(const Ticket *t, char *dest, size_t maxlen) {
+    snprintf(dest, maxlen,
+        "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
+        t->id,
+        t->titolo,
+        t->descrizione,
+        t->data_creazione,
+        prioritaToString(t->priorita),
+        statoToString(t->stato),
+        t->agente
+    );
 }
 
-int searchTicketsByStatoByUser(const char *username, const char *stato, char *buffer, size_t max_size) {
-    FILE *file = fopen(TICKET_FILE, "rb");
+
+int updateDescriptionAndTitle(int id, const char *username, const char *nuovo_titolo, const char *nuova_descrizione){
+    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
     if (!file) return -1;
 
-    buffer[0] = '\0';
     Ticket t;
-    int count = 0;
-
     while (fread(&t, sizeof(Ticket), 1, file)) {
-        if (strcmp(t.username, username) == 0 && strcmp(statoToString(t.stato), stato) == 0) {
-            char temp[512];
-            snprintf(temp, sizeof(temp),
-                     "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
-                     t.id, t.titolo, t.descrizione, t.data_creazione,
-                     prioritaToString(t.priorita), statoToString(t.stato), t.agente);
-            if (strlen(buffer) + strlen(temp) < max_size) {
-                strcat(buffer, temp);
-                count++;
+        
+        //Normalizzo username per confronto
+        char clean_username[64];
+        memcpy(clean_username, t.username, sizeof(t.username));
+        clean_username[sizeof(clean_username) - 1] = '\0';
+        for (int i = 0; i < sizeof(clean_username); i++) {
+            if (clean_username[i] == '\n' || clean_username[i] == '\r') {
+                clean_username[i] = '\0';
+                break;
             }
+        }
+        
+
+        if (t.id == id && strcmp(clean_username, username) == 0) {
+            // Aggiorna i campi
+            strncpy(t.titolo, nuovo_titolo, sizeof(t.titolo) - 1);
+            strncpy(t.descrizione, nuova_descrizione, sizeof(t.descrizione) - 1);
+
+            // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
+            fseek(file, -sizeof(Ticket), SEEK_CUR);
+            fwrite(&t, sizeof(Ticket), 1, file);
+            fclose(file);
+            return 0; // successo
         }
     }
 
     fclose(file);
-    return count;
+    return -2; // non trovato o non autorizzato
 }

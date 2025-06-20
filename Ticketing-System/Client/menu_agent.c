@@ -4,7 +4,7 @@
 #include <sys/socket.h>
 #include "menu_agent.h"
 
-void avviaMenuAgente(int client_fd) {
+void startAgentMenu(int client_fd) {
     char scelta[10], messaggio[512];
 
     while (1) {

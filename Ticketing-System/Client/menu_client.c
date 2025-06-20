@@ -8,7 +8,7 @@ extern void buildTicketMessage(char *dest, int max_length);
 
 void sendRequestaAndReveiveResponse(int client_fd, const char *messaggio, char *buffer, size_t bufsize);
 
-void avviaMenuClient(int client_fd, const char *username) {
+void startClientMenu(int client_fd, const char *username) {
     char scelta[10], messaggio[512], response[8192];
 
     while (1) {
@@ -19,6 +19,7 @@ void avviaMenuClient(int client_fd, const char *username) {
         printf("4. Cerca tuoi ticket per titolo\n");
         printf("5. Cerca tuoi ticket per descrizione\n");
         printf("6. Cerca tuoi ticket per stato (Aperto/In Corso/Chiuso)\n");
+        printf("7. Modifica titolo e descrizione di un tuo ticket\n");
         printf("0. Esci\n");
         printf("Scelta: ");
         fgets(scelta, sizeof(scelta), stdin);
@@ -77,6 +78,27 @@ void avviaMenuClient(int client_fd, const char *username) {
                 sendRequestaAndReveiveResponse(client_fd, messaggio, response, sizeof(response));
                 break;
             }
+
+            case '7': {
+                char id[10], nuovo_titolo[100], nuova_descrizione[256];
+
+                printf("Inserisci ID del ticket da modificare: ");
+                fgets(id, sizeof(id), stdin);
+                id[strcspn(id, "\n")] = 0;
+
+                printf("Nuovo titolo: ");
+                fgets(nuovo_titolo, sizeof(nuovo_titolo), stdin);
+                nuovo_titolo[strcspn(nuovo_titolo, "\n")] = 0;
+
+                printf("Nuova descrizione: ");
+                fgets(nuova_descrizione, sizeof(nuova_descrizione), stdin);
+                nuova_descrizione[strcspn(nuova_descrizione, "\n")] = 0;
+
+                snprintf(messaggio, sizeof(messaggio), "UPDATE_YOUR_TICKET|%s|%s|%s", id, nuovo_titolo, nuova_descrizione);
+                sendRequestaAndReveiveResponse(client_fd, messaggio, response, sizeof(response));
+                break;
+            }
+
 
             case '0':
                 printf("Uscita...\n");

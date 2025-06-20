@@ -26,6 +26,12 @@ typedef struct {
     char username[50];     // Nome utente del cliente che ha creato il ticket
 } Ticket;
 
+typedef enum {
+    FIELD_TITOLO,
+    FIELD_DESCRIZIONE,
+    FIELD_STATO
+} CampoRicerca;
+
 int generateNewTicketId();
 void getCurrentDate(char *date);
 int saveTicket(Ticket *ticket);
@@ -35,9 +41,9 @@ int getAllTickets(char *buffer, size_t bufsize);
 int getTicketsByUser(const char *username, char *buffer, size_t bufsize);
 int readTicketByIdAndUser(int id, const char *username, Ticket *ticket);
 int createNewTicket(const char *buffer, const char *username);
-int searchTicketsByTitoloByUser(const char *username, const char *keyword, char *buffer, size_t max_size);
-int searchTicketsByDescrizioneByUser(const char *username, const char *keyword, char *buffer, size_t max_size);
-int searchTicketsByStatoByUser(const char *username, const char *stato, char *buffer, size_t max_size);
+int searchTicketsByFieldByUser(const char *username, const char *keyword, CampoRicerca campo, char *buffer, size_t max_size);
+void formatTicket(const Ticket *t, char *dest, size_t maxlen); 
+int updateDescriptionAndTitle(int id, const char *username, const char *nuovo_titolo, const char *nuova_descrizione);
 
 const char* prioritaToString(Priorita p);
 const char* statoToString(Stato s);
