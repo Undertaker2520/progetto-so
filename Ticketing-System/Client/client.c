@@ -80,7 +80,7 @@ int main() {
     if (strcmp(ruolo, "CLIENT") == 0) {
         startClientMenu(client_fd, username);
     } else {
-        startAgentMenu(client_fd);
+        startAgentMenu(client_fd, username);
     }
     return 0;
 }
@@ -135,3 +135,14 @@ void buildTicketMessage(char *dest, int max_length) {
     snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
 }
 
+void sendRequestaAndReveiveResponse(int client_fd, const char *messaggio, char *buffer, size_t bufsize) {
+    send(client_fd, messaggio, strlen(messaggio), 0);
+    memset(buffer, 0, bufsize);
+    int bytes = recv(client_fd, buffer, bufsize - 1, 0);
+    if (bytes > 0) {
+        buffer[bytes] = '\0';
+        printf("%s\n", buffer);
+    } else {
+        printf("Errore durante la ricezione della risposta dal server.\n");
+    }
+}

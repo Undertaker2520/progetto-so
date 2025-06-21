@@ -22,7 +22,7 @@ typedef struct {
     char data_creazione[20]; // formato "YYYY-MM-DD"
     Priorita priorita;
     Stato stato;          // Aperto, In Corso, Chiuso
-    char agente[50];         // Nome agente o "nessuno"
+    char agente[50];        // Nome agente o "nessuno"
     char username[50];     // Nome utente del cliente che ha creato il ticket
 } Ticket;
 
@@ -36,7 +36,7 @@ int generateNewTicketId();
 void getCurrentDate(char *date);
 int saveTicket(Ticket *ticket);
 int parse_ticket_string(const char *ticket_string, Ticket *ticket);
-int readTicketById(int id, Ticket *ticket);
+int getTicketById(int id, Ticket *ticket);
 int getAllTickets(char *buffer, size_t bufsize);
 int getTicketsByUser(const char *username, char *buffer, size_t bufsize);
 int readTicketByIdAndUser(int id, const char *username, Ticket *ticket);
@@ -44,6 +44,10 @@ int createNewTicket(const char *buffer, const char *username);
 int searchTicketsByFieldByUser(const char *username, const char *keyword, CampoRicerca campo, char *buffer, size_t max_size);
 void formatTicket(const Ticket *t, char *dest, size_t maxlen); 
 int updateDescriptionAndTitle(int id, const char *username, const char *nuovo_titolo, const char *nuova_descrizione);
+int getTicketsByAgent(const char *agent_username, char *buffer, size_t max_size);
+int updateAssignedAgent(int id, const char *assigned_agent);
+int updateStatus(int id, const char *new_status);
+int updatePriority(int id, const char *new_priority);
 
 const char* prioritaToString(Priorita p);
 const char* statoToString(Stato s);

@@ -6,7 +6,7 @@
 
 extern void buildTicketMessage(char *dest, int max_length);
 
-void sendRequestaAndReveiveResponse(int client_fd, const char *messaggio, char *buffer, size_t bufsize);
+extern void sendRequestaAndReveiveResponse(int client_fd, const char *messaggio, char *buffer, size_t bufsize);
 
 void startClientMenu(int client_fd, const char *username) {
     char scelta[10], messaggio[512], response[8192];
@@ -104,7 +104,6 @@ void startClientMenu(int client_fd, const char *username) {
                 printf("Uscita...\n");
                 close(client_fd);
                 return;
-
             default:
                 printf("Scelta non valida.\n");
                 break;
@@ -112,14 +111,3 @@ void startClientMenu(int client_fd, const char *username) {
     }
 }
 
-void sendRequestaAndReveiveResponse(int client_fd, const char *messaggio, char *buffer, size_t bufsize) {
-    send(client_fd, messaggio, strlen(messaggio), 0);
-    memset(buffer, 0, bufsize);
-    int bytes = recv(client_fd, buffer, bufsize - 1, 0);
-    if (bytes > 0) {
-        buffer[bytes] = '\0';
-        printf("%s\n", buffer);
-    } else {
-        printf("Errore durante la ricezione della risposta dal server.\n");
-    }
-}

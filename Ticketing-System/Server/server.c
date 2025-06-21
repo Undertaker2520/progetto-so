@@ -17,6 +17,8 @@ void configureAddress(struct sockaddr_in *address);
 void binding(int server_fd, struct sockaddr *address, socklen_t addrlen);
 void acceptConnections(int server_fd, int *new_socket);
 int handleClientRequest(int socket);
+void handleGetAllTickets(int socket, const char *buffer);
+void handleGetTicketsByAgent(int socket, const char *buffer);
 void handleGetAllTicketsByLoggedUser(int socket, const char *buffer);
 void handleGetTicketByIdAndLoggedUser(int socket, const char *buffer);
 void handleNewTicket(int socket, const char *buffer);
@@ -25,7 +27,12 @@ int authenticateUser(const char *username, const char *password, char *ruolo);
 void salvaSessione(int socket_fd, const char *username);
 const char* getUsernameBySocket(int socket_fd);
 void handleSearchByFieldByUser(int socket, const char *buffer, CampoRicerca campo);
-void handleUpdateTicket(int socket, const char *buffer);
+void handleUpdateTicketDescriptionAndTitle(int socket, const char *buffer);
+void handleUpdateAssignedAgent(int socket, const char *buffer);
+void handleUpdateStatus(int socket, const char *buffer);
+void handleCheckUserRole(int socket, const char *buffer);
+void handleUpdatePriority(int socket, const char *buffer);
+void handleGetTicketById(int socket, const char *buffer);
 
 typedef enum {
     CMD_NEW_TICKET,
@@ -36,18 +43,31 @@ typedef enum {
     CMD_BY_STATO_BY_USER,
     CMD_UNKNOWN,
     CMD_UPDATE_YOUR_TICKET,
-    CMD_LOGIN
+    CMD_GET_ALL_TICKETS,
+    CMD_GET_TICKETS_BY_AGENT,
+    CMD_UPDATE_ASSIGNED_AGENT,
+    CMD_UPDATE_STATUS,
+    CMD_CHECK_USER_ROLE,
+    CMD_LOGIN,
+    CMD_UPDATE_TICKET_PRIORITY,
+    CMD_GET_TICKET_BY_ID
 } CommandType;
 
 CommandType parseCommand(const char *buffer) {
     if (strncmp(buffer, "NEW_TICKET|", strlen("NEW_TICKET|")) == 0) return CMD_NEW_TICKET;
     if (strncmp(buffer, "GET_ALL_TICKETS_BY_USER|", strlen("GET_ALL_TICKETS_BY_USER|")) == 0) return CMD_GET_ALL_BY_USER;
+    if (strncmp(buffer, "CHECK_USER_ROLE|", strlen("CHECK_USER_ROLE|")) == 0) return CMD_CHECK_USER_ROLE;
+    if (strncmp(buffer, "GET_ALL_TICKETS|", strlen("GET_ALL_TICKETS|")) == 0) return CMD_GET_ALL_TICKETS;
+    if (strncmp(buffer, "GET_ALL_TICKETS_BY_AGENT|", strlen("GET_ALL_TICKETS_BY_AGENT|")) == 0) return CMD_GET_TICKETS_BY_AGENT;
     if (strncmp(buffer, "GET_TICKET_BY_ID_AND_USER|", strlen("GET_TICKET_BY_ID_AND_USER|")) == 0) return CMD_GET_BY_ID_BY_USER;
     if (strncmp(buffer, "GET_TICKET_BY_TITOLO_BY_USER|", strlen("GET_TICKET_BY_TITOLO_BY_USER|")) == 0) return CMD_BY_TITOLO_BY_USER;
     if (strncmp(buffer, "GET_TICKET_BY_DESCRIZIONE_BY_USER|", strlen("GET_TICKET_BY_DESCRIZIONE_BY_USER|")) == 0) return CMD_BY_DESCRIZIONE_BY_USER;
     if (strncmp(buffer, "GET_TICKET_BY_STATO_BY_USER|", strlen("GET_TICKET_BY_STATO_BY_USER|")) == 0) return CMD_BY_STATO_BY_USER;
     if (strncmp(buffer, "UPDATE_YOUR_TICKET|", strlen("UPDATE_YOUR_TICKET|")) == 0) return CMD_UPDATE_YOUR_TICKET;
-
+    if (strncmp(buffer, "UPDATE_TICKET_STATUS|", strlen("UPDATE_TICKET_STATUS|")) == 0) return CMD_UPDATE_STATUS;
+    if (strncmp(buffer, "UPDATE_ASSIGNED_AGENT|", strlen("UPDATE_ASSIGNED_AGENT|")) == 0) return CMD_UPDATE_ASSIGNED_AGENT;
+    if (strncmp(buffer, "UPDATE_TICKET_PRIORITY|", strlen("UPDATE_TICKET_PRIORITY|")) == 0) return CMD_UPDATE_TICKET_PRIORITY;
+    if (strncmp(buffer, "GET_TICKET_BY_ID|", strlen("GET_TICKET_BY_ID|")) == 0) return CMD_GET_TICKET_BY_ID;
     if (strncmp(buffer, "LOGIN|", strlen("LOGIN")) == 0) return CMD_LOGIN;
     return CMD_UNKNOWN;
 }
@@ -201,8 +221,29 @@ int handleClientRequest(int socket) {
             if (handleLogin(socket, buffer) == 0)
                 return 0;
             break;
+        case CMD_GET_ALL_TICKETS:
+            handleGetAllTickets(socket, buffer);
+            break;
+        case CMD_CHECK_USER_ROLE:
+            handleCheckUserRole(socket, buffer);
+            break;
+        case CMD_GET_TICKETS_BY_AGENT:
+            handleGetTicketsByAgent(socket, buffer);
+            break;
         case CMD_UPDATE_YOUR_TICKET:
-            handleUpdateTicket(socket, buffer);
+            handleUpdateTicketDescriptionAndTitle(socket, buffer);
+            break;
+        case CMD_UPDATE_STATUS:
+            handleUpdateStatus(socket, buffer);
+            break;
+        case CMD_UPDATE_ASSIGNED_AGENT:
+            handleUpdateAssignedAgent(socket, buffer);
+            break;
+        case CMD_UPDATE_TICKET_PRIORITY:
+            handleUpdatePriority(socket, buffer);
+            break;
+        case CMD_GET_TICKET_BY_ID:
+            handleGetTicketById(socket, buffer);
             break;
         default:
             send(socket, "ERR|Comando sconosciuto", 24, 0);
@@ -258,7 +299,6 @@ void handleGetTicketByIdAndLoggedUser(int socket, const char *buffer) {
     } else {
         send(socket, "ERR|Ticket non trovato", 23, 0);
     }
-
 }
 
 void handleNewTicket(int socket, const char *buffer) {
@@ -366,7 +406,7 @@ void handleSearchByFieldByUser(int socket, const char *buffer, CampoRicerca camp
         send(socket, out, strlen(out), 0);
 }
 
-void handleUpdateTicket(int socket, const char *buffer) {
+void handleUpdateTicketDescriptionAndTitle(int socket, const char *buffer) {
     char copy[512];
     strncpy(copy, buffer, sizeof(copy));
     copy[sizeof(copy) - 1] = '\0';
@@ -391,3 +431,164 @@ void handleUpdateTicket(int socket, const char *buffer) {
         send(socket, "ERR|Modifica fallita", 21, 0);
 }
 
+void handleGetAllTickets(int socket, const char *buffer){
+    char ticket_buffer[8192];
+    int num_tickets = getAllTickets(ticket_buffer, sizeof(ticket_buffer));
+
+    printf("Numero di ticket letti: %d\n", num_tickets);
+
+    switch (num_tickets) {
+        case -1:
+            send(socket, "ERR|Errore lettura tickets", 27, 0);
+            break;
+        case 0:
+            send(socket, "OK|Nessun ticket presente", 26, 0);
+            break;
+        default:
+            send(socket, ticket_buffer, strlen(ticket_buffer), 0);
+            break;
+    }
+}
+
+void handleGetTicketsByAgent(int socket, const char *buffer) {
+    const char *agent_username = buffer + strlen("GET_ALL_TICKETS_BY_AGENT|");
+    char ticket_buffer[8192]; 
+    int num_tickets = getTicketsByAgent(agent_username, ticket_buffer, sizeof(ticket_buffer));
+
+    printf("Numero di ticket letti: %d\n", num_tickets);
+
+    switch (num_tickets) {
+        case -1:
+            send(socket, "ERR|Errore lettura tickets", 27, 0);
+            break;
+        case 0:
+            send(socket, "Nessun ticket a te assegnato", 26, 0);
+            break;
+        default:
+            send(socket, ticket_buffer, strlen(ticket_buffer), 0);
+            break;
+    }
+}
+
+void handleUpdateAssignedAgent(int socket, const char *buffer) {
+    char copy[512];
+    strncpy(copy, buffer, sizeof(copy));
+    copy[sizeof(copy) - 1] = '\0';
+
+    char *id_str = strtok(copy + strlen("UPDATE_ASSIGNED_AGENT|"), "|");
+    char *nuovo_agente = strtok(NULL, "|");
+
+    if (!id_str || !nuovo_agente) {
+        send(socket, "ERR|Formato comando non valido", 30, 0);
+        return;
+    }
+
+    int id = atoi(id_str);
+    int result = updateAssignedAgent(id, nuovo_agente);
+    switch(result){
+        case 0:
+            send(socket, "OK|Modifica completata", 23, 0);
+            break;
+        case -2:
+            send(socket, "OK|Ticket non trovato", 23, 0);
+            break;
+        default:
+            send(socket, "ERR|Modifica fallita", 21, 0);
+            break;
+    }
+}
+
+void handleUpdateStatus(int socket, const char *buffer){
+    char copy[512];
+    strncpy(copy, buffer, sizeof(copy));
+    copy[sizeof(copy) - 1] = '\0';
+
+    char *id_str = strtok(copy + strlen("UPDATE_TICKET_STATUS|"), "|");
+    char *nuovo_status = strtok(NULL, "|");
+
+    if (!id_str || !nuovo_status) {
+        send(socket, "ERR|Formato comando non valido", 30, 0);
+        return;
+    }
+
+    int id = atoi(id_str);
+    int result = updateStatus(id, nuovo_status);
+    switch(result){
+        case 0:
+            send(socket, "OK|Modifica completata", 23, 0);
+            break;
+        case -2:
+            send(socket, "OK|Ticket non trovato", 23, 0);
+            break;
+        default:
+            send(socket, "ERR|Modifica fallita", 21, 0);
+            break;
+    }
+}
+void handleCheckUserRole(int socket, const char *buffer) {
+    const char *username = buffer + strlen("CHECK_USER_ROLE|");
+    char ruolo[32];
+
+    if (getUserRole(username, ruolo, sizeof(ruolo)) == 0) {
+        char reply[64];
+        snprintf(reply, sizeof(reply), "OK|%s", ruolo);
+        send(socket, reply, strlen(reply), 0);
+    } else {
+        send(socket, "ERR|Utente non trovato", 23, 0);
+    }
+}
+
+void handleUpdatePriority(int socket, const char *buffer){
+    char copy[512];
+    strncpy(copy, buffer, sizeof(copy));
+    copy[sizeof(copy) - 1] = '\0';
+
+    char *id_str = strtok(copy + strlen("UPDATE_TICKET_PRIORITY|"), "|");
+    char *nuova_priorita = strtok(NULL, "|");
+
+    if (!id_str || !nuova_priorita) {
+        send(socket, "ERR|Formato comando non valido", 30, 0);
+        return;
+    }
+
+    int id = atoi(id_str);
+    int result = updatePriority(id, nuova_priorita);
+    switch(result){
+        case 0:
+            send(socket, "OK|Modifica completata", 23, 0);
+            break;
+        case -2:
+            send(socket, "OK|Ticket non trovato", 23, 0);
+            break;
+        default:
+            send(socket, "ERR|Modifica fallita", 21, 0);
+            break;
+    }
+}
+
+void handleGetTicketById(int socket, const char *buffer){
+    // Estrai ID e username
+    char copy[128];
+    strncpy(copy, buffer, sizeof(copy));
+    copy[sizeof(copy)-1] = '\0';
+
+    char *token = strtok(copy + strlen("GET_TICKET_BY_ID|"), "|");
+    if (!token) {
+        send(socket, "ERR|Formato comando non valido", 30, 0);
+        return;
+    }
+
+    int id = atoi(token);
+    Ticket t;
+
+    if (getTicketById(id, &t) == 0) {
+        char risposta[1024];
+        snprintf(risposta, sizeof(risposta),
+            "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\nCreatore: %s\n\n",
+            t.id, t.titolo, t.descrizione, t.data_creazione,prioritaToString(t.priorita), statoToString(t.stato), t.agente, t.username
+        );
+        send(socket, risposta, strlen(risposta), 0);
+    } else {
+        send(socket, "ERR|Ticket non trovato", 23, 0);
+    }
+}

@@ -1,3 +1,4 @@
 mario,1234,AGENTE
 lucia,abcd,CLIENTE
 pietro,2222,CLIENTE
+paolo,1111,AGENTE

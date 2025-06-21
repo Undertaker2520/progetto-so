@@ -81,7 +81,7 @@ int parse_ticket_string(const char *s, Ticket *t) {
     return 0;
 }
 
-int readTicketById(int id, Ticket *ticket) {
+int getTicketById(int id, Ticket *ticket) {
     FILE *file = fopen(TICKET_FILE, "rb");
     if (!file) {
         perror("Errore apertura file tickets.db");
@@ -115,14 +115,15 @@ int getAllTickets(char *buffer, size_t bufsize) {
         char temp[512];
         int written = snprintf(
             temp, sizeof(temp),
-            "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
+            "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\nCreatore: %s\n",
             ticket.id,
             ticket.titolo,
             ticket.descrizione,
             ticket.data_creazione,
             prioritaToString(ticket.priorita),
             statoToString(ticket.stato),
-            ticket.agente
+            ticket.agente,
+            ticket.username
         );
 
         // Controlliamo se abbiamo spazio nel buffer
@@ -187,8 +188,36 @@ int getTicketsByUser(const char *username, char *buffer, size_t max_size) {
         if (strcmp(t.username, username) == 0) {
             char temp[1024];
             snprintf(temp, sizeof(temp),
-                "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
-                t.id, t.titolo, t.descrizione, t.data_creazione, prioritaToString(t.priorita), statoToString(t.stato), t.agente);
+                "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\nCreatore: %s\n\n",
+                t.id, t.titolo, t.descrizione, t.data_creazione, prioritaToString(t.priorita), statoToString(t.stato), t.agente, t.username);
+
+            if (strlen(buffer) + strlen(temp) < max_size) {
+                strcat(buffer, temp);
+                count++;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fclose(fp);
+    return count;
+}
+
+int getTicketsByAgent(const char *agent_username, char *buffer, size_t max_size) {
+    FILE *fp = fopen(TICKET_FILE, "r");
+    if (!fp) return -1;
+
+    buffer[0] = '\0';  // pulisci il buffer
+    Ticket t;
+    int count = 0;
+
+    while (fread(&t, sizeof(Ticket), 1, fp)) {
+        if (strcmp(t.agente, agent_username) == 0) {
+            char temp[1024];
+            snprintf(temp, sizeof(temp),
+                "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\nCreatore: %s\n",
+                t.id, t.titolo, t.descrizione, t.data_creazione, prioritaToString(t.priorita), statoToString(t.stato), t.agente, t.username);
 
             if (strlen(buffer) + strlen(temp) < max_size) {
                 strcat(buffer, temp);
@@ -308,6 +337,28 @@ void formatTicket(const Ticket *t, char *dest, size_t maxlen) {
     );
 }
 
+int updateAssignedAgent(int id, const char *assigned_agent){
+    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
+    if (!file) return -1;
+
+    Ticket t;
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (t.id == id) {
+            // Aggiorna i campi
+            strncpy(t.agente, assigned_agent, sizeof(t.agente) - 1);
+            t.agente[sizeof(t.agente) - 1] = '\0';  // assicura il terminatore di stringa
+            
+            // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
+            fseek(file, -sizeof(Ticket), SEEK_CUR);
+            fwrite(&t, sizeof(Ticket), 1, file);
+            fclose(file);
+            return 0; // successo
+        }
+    }
+
+    fclose(file);
+    return -2; // non trovato o non autorizzato
+}
 
 int updateDescriptionAndTitle(int id, const char *username, const char *nuovo_titolo, const char *nuova_descrizione){
     FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
@@ -333,6 +384,50 @@ int updateDescriptionAndTitle(int id, const char *username, const char *nuovo_ti
             strncpy(t.titolo, nuovo_titolo, sizeof(t.titolo) - 1);
             strncpy(t.descrizione, nuova_descrizione, sizeof(t.descrizione) - 1);
 
+            // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
+            fseek(file, -sizeof(Ticket), SEEK_CUR);
+            fwrite(&t, sizeof(Ticket), 1, file);
+            fclose(file);
+            return 0; // successo
+        }
+    }
+
+    fclose(file);
+    return -2; // non trovato 
+}
+
+int updateStatus(int id, const char *new_status){
+    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
+    if (!file) return -1;
+
+    Ticket t;
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (t.id == id) {
+            // Aggiorna i campi
+            t.stato = stringToStato(new_status);
+            
+            // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
+            fseek(file, -sizeof(Ticket), SEEK_CUR);
+            fwrite(&t, sizeof(Ticket), 1, file);
+            fclose(file);
+            return 0; // successo
+        }
+    }
+
+    fclose(file);
+    return -2; // non trovato o non autorizzato
+}
+
+int updatePriority(int id, const char *new_priority){
+    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
+    if (!file) return -1;
+
+    Ticket t;
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (t.id == id) {
+            // Aggiorna i campi
+            t.priorita = stringToPriorita(new_priority);
+            
             // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
             fseek(file, -sizeof(Ticket), SEEK_CUR);
             fwrite(&t, sizeof(Ticket), 1, file);

@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "stdlib.h": "c",
-        "socket.h": "c"
+        "socket.h": "c",
+        "menu_agent.h": "c"
     }
 }
