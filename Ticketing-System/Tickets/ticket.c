@@ -298,15 +298,16 @@ int searchTicketsByFieldByUser(const char *username, const char *keyword, CampoR
         int match = 0;
         switch (campo) {
             case FIELD_TITOLO:
-                match = strstr(t.titolo, keyword) != NULL;
+                match = strcasestr(t.titolo, keyword) != NULL;
                 break;
             case FIELD_DESCRIZIONE:
-                match = strstr(t.descrizione, keyword) != NULL;
+                match = strcasestr(t.descrizione, keyword) != NULL;
                 break;
             case FIELD_STATO:
-                match = strcmp(statoToString(t.stato), keyword) == 0;
+                match = strcasecmp(statoToString(t.stato), keyword) == 0;
                 break;
         }
+
 
         if (match) {
             char temp[512];

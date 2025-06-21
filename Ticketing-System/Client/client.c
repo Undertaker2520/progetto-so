@@ -129,9 +129,31 @@ void ticketComponentWriter(CampoTicket campo, char *dest, int max_length) {
 
 void buildTicketMessage(char *dest, int max_length) {
     char titolo[100], descrizione[256], priorita[10];
+
     ticketComponentWriter(TITOLO, titolo, sizeof(titolo));
     ticketComponentWriter(DESCRIZIONE, descrizione, sizeof(descrizione));
-    ticketComponentWriter(PRIORITA, priorita, sizeof(priorita));
+
+    char *priorita_valide[] = {"Alta", "Media", "Bassa"};
+    int priorita_valida = 0;
+
+    do {
+        printf("Inserisci la priorità del ticket (Alta / Media / Bassa): ");
+        fgets(priorita, sizeof(priorita), stdin);
+        priorita[strcspn(priorita, "\n")] = 0;
+
+        priorita_valida = 0;
+        for (int i = 0; i < 3; i++) {
+            if (strcasecmp(priorita, priorita_valide[i]) == 0) {
+                priorita_valida = 1;
+                break;
+            }
+        }
+
+        if (!priorita_valida) {
+            printf("Priorità non valida. Riprova.\n");
+        }
+    } while (!priorita_valida);
+
     snprintf(dest, max_length, "NEW_TICKET|%s|%s|%s", titolo, descrizione, priorita);
 }
 

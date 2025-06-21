@@ -69,15 +69,33 @@ void startClientMenu(int client_fd, const char *username) {
                 break;
             }
 
-            case '6': {
+            case '6': 
                 char stato[32];
-                printf("Inserisci stato (Aperto, In Corso, Chiuso): ");
-                fgets(stato, sizeof(stato), stdin);
-                stato[strcspn(stato, "\n")] = 0;
+                char *stati_validi[] = {"Aperto", "In Corso", "Chiuso"};
+                int stato_valido = 0;
+
+                do {
+                    printf("Inserisci stato (Aperto, In Corso, Chiuso): ");
+                    fgets(stato, sizeof(stato), stdin);
+                    stato[strcspn(stato, "\n")] = 0;
+
+                    stato_valido = 0;
+                    for (int i = 0; i < 3; i++) {
+                        if (strcasecmp(stato, stati_validi[i]) == 0) {
+                            stato_valido = 1;
+                            break;
+                        }
+                    }
+
+                    if (!stato_valido) {
+                        printf("Stato non valido. Riprova.\n");
+                    }
+
+                } while (!stato_valido);
+
                 snprintf(messaggio, sizeof(messaggio), "GET_TICKET_BY_STATO_BY_USER|%s|%s", stato, username);
                 sendRequestaAndReveiveResponse(client_fd, messaggio, response, sizeof(response));
                 break;
-            }
 
             case '7': {
                 char id[10], nuovo_titolo[100], nuova_descrizione[256];

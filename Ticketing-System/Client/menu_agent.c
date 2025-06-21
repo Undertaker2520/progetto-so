@@ -33,34 +33,53 @@ void startAgentMenu(int client_fd, const char *username) {
                 sendRequestaAndReveiveResponse(client_fd, messaggio, response, sizeof(response));
                 break;
             break;
-            case '3': 
+            case '3': {
+                char ticket_id[10];
                 char agente[64];
                 char ruolo_check[128];
+                char risposta_agente[512];
 
                 printf("ID del ticket da assegnare: ");
-                fgets(id, sizeof(id), stdin);
-                id[strcspn(id, "\n")] = 0; // rimuove newline
+                fgets(ticket_id, sizeof(ticket_id), stdin);
+                ticket_id[strcspn(ticket_id, "\n")] = 0;
 
                 while (1) {
                     printf("Nome dell'agente da assegnare: ");
                     fgets(agente, sizeof(agente), stdin);
                     agente[strcspn(agente, "\n")] = 0;
 
-                    // Verifica che l'agente esista ed abbia il ruolo corretto
                     char check_msg[128];
                     snprintf(check_msg, sizeof(check_msg), "CHECK_USER_ROLE|%s", agente);
                     sendRequestaAndReveiveResponse(client_fd, check_msg, ruolo_check, sizeof(ruolo_check));
 
                     if (strncmp(ruolo_check, "OK|AGENTE", 9) == 0) {
-                        break;  // Agente valido
+                        break;
                     } else {
                         printf("Utente non valido o non è un agente. Riprova.\n");
                     }
                 }
 
-                snprintf(messaggio, sizeof(messaggio), "UPDATE_ASSIGNED_AGENT|%s|%s", id, agente);
-                sendRequestaAndReveiveResponse(client_fd, messaggio, response, sizeof(response));
+                while (1) {
+                    snprintf(messaggio, sizeof(messaggio), "UPDATE_ASSIGNED_AGENT|%s|%s", ticket_id, agente);
+                    sendRequestaAndReveiveResponse(client_fd, messaggio, risposta_agente, sizeof(risposta_agente));
+
+                    if (strncmp(risposta_agente, "OK|Modifica completata", 23) == 0) {
+                        printf("Assegnazione completata con successo.\n");
+                        break;
+                    } else if (strncmp(risposta_agente, "OK|Ticket non trovato", 22) == 0) {
+                        printf("ID non valido. Riprova.\n");
+                        printf("ID del ticket da assegnare: ");
+                        fgets(ticket_id, sizeof(ticket_id), stdin);
+                        ticket_id[strcspn(ticket_id, "\n")] = 0;
+                    } else {
+                        printf("Errore: %s\n", risposta_agente);
+                        break;
+                    }
+                }
+
                 break;
+            }
+
             case '4': 
                 char nuovo_stato[100];
 
