@@ -46,7 +46,7 @@ typedef enum {
     CMD_GET_ALL_TICKETS,
     CMD_GET_TICKETS_BY_AGENT,
     CMD_UPDATE_ASSIGNED_AGENT,
-    CMD_UPDATE_STATUS,
+    CMD_UPDATE_TICKET_STATUS,
     CMD_CHECK_USER_ROLE,
     CMD_LOGIN,
     CMD_UPDATE_TICKET_PRIORITY,
@@ -64,7 +64,7 @@ CommandType parseCommand(const char *buffer) {
     if (strncmp(buffer, "GET_TICKET_BY_DESCRIZIONE_BY_USER|", strlen("GET_TICKET_BY_DESCRIZIONE_BY_USER|")) == 0) return CMD_BY_DESCRIZIONE_BY_USER;
     if (strncmp(buffer, "GET_TICKET_BY_STATO_BY_USER|", strlen("GET_TICKET_BY_STATO_BY_USER|")) == 0) return CMD_BY_STATO_BY_USER;
     if (strncmp(buffer, "UPDATE_YOUR_TICKET|", strlen("UPDATE_YOUR_TICKET|")) == 0) return CMD_UPDATE_YOUR_TICKET;
-    if (strncmp(buffer, "UPDATE_TICKET_STATUS|", strlen("UPDATE_TICKET_STATUS|")) == 0) return CMD_UPDATE_STATUS;
+    if (strncmp(buffer, "UPDATE_TICKET_STATUS|", strlen("UPDATE_TICKET_STATUS|")) == 0) return CMD_UPDATE_TICKET_STATUS;
     if (strncmp(buffer, "UPDATE_ASSIGNED_AGENT|", strlen("UPDATE_ASSIGNED_AGENT|")) == 0) return CMD_UPDATE_ASSIGNED_AGENT;
     if (strncmp(buffer, "UPDATE_TICKET_PRIORITY|", strlen("UPDATE_TICKET_PRIORITY|")) == 0) return CMD_UPDATE_TICKET_PRIORITY;
     if (strncmp(buffer, "GET_TICKET_BY_ID|", strlen("GET_TICKET_BY_ID|")) == 0) return CMD_GET_TICKET_BY_ID;
@@ -233,7 +233,7 @@ int handleClientRequest(int socket) {
         case CMD_UPDATE_YOUR_TICKET:
             handleUpdateTicketDescriptionAndTitle(socket, buffer);
             break;
-        case CMD_UPDATE_STATUS:
+        case CMD_UPDATE_TICKET_STATUS:
             handleUpdateStatus(socket, buffer);
             break;
         case CMD_UPDATE_ASSIGNED_AGENT:
