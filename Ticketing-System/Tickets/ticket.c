@@ -7,9 +7,21 @@
 
 // Percorso file con ticket
 #define TICKET_FILE "tickets.db"
+typedef int (*TicketFilterFn)(const Ticket *, const char *);
+
+//definizione funzioni usate solo internamente a ticket.c
+static int generateNewTicketId();
+static void getCurrentDate(char *date);
+static int saveTicket(Ticket *ticket);
+static void ticketToString(const Ticket *t, char *dest, size_t maxlen);
+static int rewriteTicket(FILE *file, const Ticket *t);
+static int getTicketsByPredicate(TicketFilterFn filter, const char *value, char *buffer, size_t max_size);
+static int isUserTicket(const Ticket *t, const char *user);
+static int isAgentTicket(const Ticket *t, const char *agent);
+static void cleanString(char *s, size_t len);
 
 //generazione nuovo ID leggendo da file
-int generateNewTicketId() {
+static int generateNewTicketId() {
     FILE *file = fopen(TICKET_FILE, "r");
     if (!file) {
         return 1; // Se il file non esiste, inizia da 1
@@ -26,14 +38,14 @@ int generateNewTicketId() {
 }
 
 // Ottiene la data corrente in formato "YYYY-MM-DD"
-void getCurrentDate(char *date) {
+static void getCurrentDate(char *date) {
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
     sprintf(date, "%04d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
 }
 
 //Salva ticket su file, ritorna 0 se successo, -1 se errore
-int saveTicket(Ticket *ticket) {
+static int saveTicket(Ticket *ticket) {
     FILE *file = fopen(TICKET_FILE, "ab");
     if (!file) {
         perror("Errore nell'apertura del file");
@@ -48,36 +60,6 @@ int saveTicket(Ticket *ticket) {
     }
 
     fclose(file);
-    return 0;
-}
-
-// Converte da stringa (pipe-separated) a `Ticket`
-int parse_ticket_string(const char *s, Ticket *t) {
-    char tmp[512];
-    strncpy(tmp, s, 511);
-    tmp[511] = '\0';
-    char *tok = strtok(tmp, "|");
-    if (!tok) return -1;
-    t->id = atoi(tok);
-
-    tok = strtok(NULL, "|"); if (!tok) return -1;
-    strncpy(t->titolo, tok, sizeof(t->titolo)-1);
-
-    tok = strtok(NULL, "|"); if (!tok) return -1;
-    strncpy(t->descrizione, tok, sizeof(t->descrizione)-1);
-
-    tok = strtok(NULL, "|"); if (!tok) return -1;
-    strncpy(t->data_creazione, tok, sizeof(t->data_creazione)-1);
-
-    tok = strtok(NULL, "|"); if (!tok) return -1;
-    t->priorita = stringToPriorita(tok);
-
-    tok = strtok(NULL, "|"); if (!tok) return -1;
-     t->stato = stringToStato(tok);
-
-    tok = strtok(NULL, "|"); if (!tok) return -1;
-    strncpy(t->agente, tok, sizeof(t->agente)-1);
-
     return 0;
 }
 
@@ -113,18 +95,8 @@ int getAllTickets(char *buffer, size_t bufsize) {
     while (fread(&ticket, sizeof(Ticket), 1, file)) {
         // Prepariamo una rappresentazione testuale di un singolo ticket
         char temp[512];
-        int written = snprintf(
-            temp, sizeof(temp),
-            "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\nCreatore: %s\n",
-            ticket.id,
-            ticket.titolo,
-            ticket.descrizione,
-            ticket.data_creazione,
-            prioritaToString(ticket.priorita),
-            statoToString(ticket.stato),
-            ticket.agente,
-            ticket.username
-        );
+        ticketToString(&ticket, temp, sizeof(temp));
+        int written = strlen(temp);
 
         // Controlliamo se abbiamo spazio nel buffer
         if (used + written >= bufsize) {
@@ -177,64 +149,16 @@ int createNewTicket(const char *buffer, const char *username){
 }
 
 int getTicketsByUser(const char *username, char *buffer, size_t max_size) {
-    FILE *fp = fopen(TICKET_FILE, "r");
-    if (!fp) return -1;
-
-    buffer[0] = '\0';  // pulisci il buffer
-    Ticket t;
-    int count = 0;
-
-    while (fread(&t, sizeof(Ticket), 1, fp)) {
-        if (strcmp(t.username, username) == 0) {
-            char temp[1024];
-            snprintf(temp, sizeof(temp),
-                "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\nCreatore: %s\n\n",
-                t.id, t.titolo, t.descrizione, t.data_creazione, prioritaToString(t.priorita), statoToString(t.stato), t.agente, t.username);
-
-            if (strlen(buffer) + strlen(temp) < max_size) {
-                strcat(buffer, temp);
-                count++;
-            } else {
-                break;
-            }
-        }
-    }
-
-    fclose(fp);
-    return count;
+    return getTicketsByPredicate(isUserTicket, username, buffer, max_size);
 }
 
 int getTicketsByAgent(const char *agent_username, char *buffer, size_t max_size) {
-    FILE *fp = fopen(TICKET_FILE, "r");
-    if (!fp) return -1;
-
-    buffer[0] = '\0';  // pulisci il buffer
-    Ticket t;
-    int count = 0;
-
-    while (fread(&t, sizeof(Ticket), 1, fp)) {
-        if (strcmp(t.agente, agent_username) == 0) {
-            char temp[1024];
-            snprintf(temp, sizeof(temp),
-                "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\nCreatore: %s\n",
-                t.id, t.titolo, t.descrizione, t.data_creazione, prioritaToString(t.priorita), statoToString(t.stato), t.agente, t.username);
-
-            if (strlen(buffer) + strlen(temp) < max_size) {
-                strcat(buffer, temp);
-                count++;
-            } else {
-                break;
-            }
-        }
-    }
-
-    fclose(fp);
-    return count;
+    return getTicketsByPredicate(isAgentTicket, agent_username, buffer, max_size);
 }
 
 
 int readTicketByIdAndUser(int id, const char *username, Ticket *t) {
-    FILE *fp = fopen(TICKET_FILE, "rb");  // ✅ modalità binaria
+    FILE *fp = fopen(TICKET_FILE, "rb"); 
     if (!fp) {
         perror("Errore apertura tickets.db");
         return -1;
@@ -292,8 +216,10 @@ int searchTicketsByFieldByUser(const char *username, const char *keyword, CampoR
     Ticket t;
     int count = 0;
 
-    while (fread(&t, sizeof(Ticket), 1, file)) {
-        if (strcmp(t.username, username) != 0) continue;
+    while (fread(&t, sizeof(Ticket), 1, file)) {    
+
+        if (strcasecmp(t.username, username) != 0) continue; //confronto non case sensitive
+
 
         int match = 0;
         switch (campo) {
@@ -311,7 +237,7 @@ int searchTicketsByFieldByUser(const char *username, const char *keyword, CampoR
 
         if (match) {
             char temp[512];
-            formatTicket(&t, temp, sizeof(temp));
+            ticketToString(&t, temp, sizeof(temp));
             if (strlen(buffer) + strlen(temp) < max_size) {
                 strcat(buffer, temp);
                 count++;
@@ -325,93 +251,158 @@ int searchTicketsByFieldByUser(const char *username, const char *keyword, CampoR
     return count;
 }
 
-void formatTicket(const Ticket *t, char *dest, size_t maxlen) {
+int updateAssignedAgent(int id, const char *assigned_agent){
+    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
+    if (!file) return -1;
+
+    Ticket t;
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (t.id == id) {
+            // Aggiorna i campi
+            strncpy(t.agente, assigned_agent, sizeof(t.agente) - 1);
+            t.agente[sizeof(t.agente) - 1] = '\0';  // assicura il terminatore di stringa
+            
+            if (rewriteTicket(file, &t) == 0) {
+                fclose(file);
+                return 0;
+            }
+        }
+    }
+
+    fclose(file);
+    return -2; // non trovato o non autorizzato
+}
+
+int updateDescriptionAndTitle(int id, const char *username, const char *nuovo_titolo, const char *nuova_descrizione){
+    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
+    if (!file) return -1;
+
+    Ticket t;
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        char clean_username[64];
+        memcpy(clean_username, t.username, sizeof(t.username));
+        //normalizzazione input utente per confronto 
+        cleanString(clean_username, sizeof(clean_username));        
+
+        if (t.id == id && strcmp(clean_username, username) == 0) {
+            // Aggiorna i campi
+            strncpy(t.titolo, nuovo_titolo, sizeof(t.titolo) - 1);
+            strncpy(t.descrizione, nuova_descrizione, sizeof(t.descrizione) - 1);
+
+            if (rewriteTicket(file, &t) == 0) {
+                fclose(file);
+                return 0;
+            }
+        }
+    }
+
+    fclose(file);
+    return -2; // non trovato 
+}
+
+int updateStatus(int id, const char *new_status){
+    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
+    if (!file) return -1;
+
+    Ticket t;
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (t.id == id) {
+            // Aggiorna i campi
+            t.stato = stringToStato(new_status);
+
+            if (rewriteTicket(file, &t) == 0) {
+                fclose(file);
+                return 0;
+            }
+
+        }
+    }
+
+    fclose(file);
+    return -2; // non trovato o non autorizzato
+}
+
+int updatePriority(int id, const char *new_priority){
+    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
+    if (!file) return -1;
+
+    Ticket t;
+    while (fread(&t, sizeof(Ticket), 1, file)) {
+        if (t.id == id) {
+            // Aggiorna i campi
+            t.priorita = stringToPriorita(new_priority);
+            
+            if (rewriteTicket(file, &t) == 0) {
+                fclose(file);
+                return 0;
+            }
+        }
+    }
+
+    fclose(file);
+    return -2; // non trovato o non autorizzato
+}
+
+static void ticketToString(const Ticket *t, char *dest, size_t maxlen) {
     snprintf(dest, maxlen,
-        "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\n\n",
+        "ID: %d\nTitolo: %s\nDescrizione: %s\nData: %s\nPriorità: %s\nStato: %s\nAgente: %s\nCreatore: %s\n",
         t->id,
         t->titolo,
         t->descrizione,
         t->data_creazione,
         prioritaToString(t->priorita),
         statoToString(t->stato),
-        t->agente
+        t->agente,
+        t->username
     );
 }
 
-//Aggiornamento agente
-static const char *_stored_agent;
-static int updateAgentFn(Ticket *t) {
-    strncpy(t->agente, _stored_agent, sizeof(t->agente) - 1);
-    t->agente[sizeof(t->agente) - 1] = '\0';
-    return 0;
-}
-int updateAssignedAgent(int id, const char *assigned_agent) {
-    _stored_agent = assigned_agent;
-    return updateTicketField(id, updateAgentFn);
-}
-
-//Aggiornamento Titolo e Descrizione
-static const char *_stored_title;
-static const char *_stored_descr;
-static const char *_stored_user;
-static int updateTitleDescrFn(Ticket *t) {
-    if (strcmp(t->username, _stored_user) != 0)
-        return -1;
-
-    strncpy(t->titolo, _stored_title, sizeof(t->titolo) - 1);
-    strncpy(t->descrizione, _stored_descr, sizeof(t->descrizione) - 1);
-    return 0;
-}
-int updateDescriptionAndTitle(int id, const char *username, const char *titolo, const char *descrizione) {
-    _stored_user = username;
-    _stored_title = titolo;
-    _stored_descr = descrizione;
-    return updateTicketField(id, updateTitleDescrFn);
+//normalizzazione input utente
+static void cleanString(char *s, size_t len) {
+    s[len - 1] = '\0';
+    for (size_t i = 0; i < len; ++i) {
+        if (s[i] == '\n' || s[i] == '\r') {
+            s[i] = '\0';
+            break;
+        }
+    }
 }
 
-
-//Aggiornamento status
-static const char *_stored_status;
-static int updateStatusFn(Ticket *t) {
-    t->stato = stringToStato(_stored_status);
-    return 0;
-}
-int updateStatus(int id, const char *new_status) {
-    _stored_status = new_status;
-    return updateTicketField(id, updateStatusFn);
+static int rewriteTicket(FILE *file, const Ticket *t) {
+    // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
+    fseek(file, -sizeof(Ticket), SEEK_CUR);
+    return fwrite(t, sizeof(Ticket), 1, file) == 1 ? 0 : -1;
 }
 
-//Aggiornamento priorita'
-static const char *_stored_priority;
-static int updatePriorityFn(Ticket *t) {
-    t->priorita = stringToPriorita(_stored_priority);
-    return 0;
-}
-int updatePriority(int id, const char *priority) {
-    _stored_priority = priority;
-    return updateTicketField(id, updatePriorityFn);
-}
+static int getTicketsByPredicate(TicketFilterFn filter, const char *value, char *buffer, size_t max_size) {
+    FILE *fp = fopen(TICKET_FILE, "rb");
+    if (!fp) return -1;
 
-
-int updateTicketField(int id, int(*updateFn)(Ticket *)){
-    FILE *file = fopen(TICKET_FILE, "r+b");
-    if(!file) return -1;
-
+    buffer[0] = '\0';
     Ticket t;
-    while(fread(&t, sizeof(Ticket), 1, file)){
-        if(t.id == id){
-            if (!updateFn(&t)) {
-                fseek(file, -sizeof(Ticket), SEEK_CUR);
-                fwrite(&t, sizeof(Ticket), 1, file);
-                fclose(file);
-                return 0;
+    int count = 0;
+
+    while (fread(&t, sizeof(Ticket), 1, fp)) {
+        if (filter(&t, value)) {
+            char temp[512];
+            ticketToString(&t, temp, sizeof(temp));
+            if (strlen(buffer) + strlen(temp) < max_size) {
+                strcat(buffer, temp);
+                count++;
             } else {
-                fclose(file);
-                return -1; // fallimento callback
+                break;
             }
         }
     }
 
-    fclose(file);
-    return -2; // non trovato
+    fclose(fp);
+    return count;
+}
+
+static int isUserTicket(const Ticket *t, const char *user) {
+    return strcmp(t->username, user) == 0;
+}
+
+static int isAgentTicket(const Ticket *t, const char *agent) {
+    return strcmp(t->agente, agent) == 0;
 }

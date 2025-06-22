@@ -32,24 +32,18 @@ typedef enum {
     FIELD_STATO
 } CampoRicerca;
 
-int generateNewTicketId();
-void getCurrentDate(char *date);
-int saveTicket(Ticket *ticket);
-int parse_ticket_string(const char *ticket_string, Ticket *ticket);
+
 int getTicketById(int id, Ticket *ticket);
 int getAllTickets(char *buffer, size_t bufsize);
 int getTicketsByUser(const char *username, char *buffer, size_t bufsize);
 int readTicketByIdAndUser(int id, const char *username, Ticket *ticket);
 int createNewTicket(const char *buffer, const char *username);
 int searchTicketsByFieldByUser(const char *username, const char *keyword, CampoRicerca campo, char *buffer, size_t max_size);
-void formatTicket(const Ticket *t, char *dest, size_t maxlen); 
 int updateDescriptionAndTitle(int id, const char *username, const char *nuovo_titolo, const char *nuova_descrizione);
 int getTicketsByAgent(const char *agent_username, char *buffer, size_t max_size);
 int updateAssignedAgent(int id, const char *assigned_agent);
 int updateStatus(int id, const char *new_status);
 int updatePriority(int id, const char *new_priority);
-int updateTicketField(int id, int (*updateFn)(Ticket *));
-
 const char* prioritaToString(Priorita p);
 const char* statoToString(Stato s);
 Priorita stringToPriorita(const char *s);

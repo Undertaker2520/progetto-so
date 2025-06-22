@@ -1,0 +1,29 @@
+# Nome dell'eseguibile
+TARGET = client
+
+# Lista dei sorgenti
+SRC = Client/client.c Client/menu_client.c Client/menu_agent.c Client/utils_client.c
+
+# File oggetto generati automaticamente (.c → .o)
+OBJ = $(SRC:.c=.o)
+
+# Compilatore
+CC = gcc
+
+# Opzioni di compilazione
+CFLAGS = -Wall -g
+
+# Regola principale: compila tutto
+all: $(TARGET)
+
+# Compilazione dell'eseguibile
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# Compilazione dei file .c in .o
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Pulizia
+clean:
+	rm -f $(OBJ) $(TARGET)

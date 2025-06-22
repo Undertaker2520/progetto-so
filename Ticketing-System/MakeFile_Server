@@ -1,0 +1,29 @@
+# Nome dell'eseguibile
+TARGET = server
+
+# File sorgente
+SRC = Server/server.c Authentication/auth.c Tickets/ticket.c
+
+# File oggetto (converti .c in .o)
+OBJ = $(SRC:.c=.o)
+
+# Compilatore
+CC = gcc
+
+# Opzioni di compilazione
+CFLAGS = -Wall -g
+
+# Regola di default
+all: $(TARGET)
+
+# Come costruire l'eseguibile
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+# Regola per compilare i .c in .o
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Pulizia
+clean:
+	rm -f $(OBJ) $(TARGET)

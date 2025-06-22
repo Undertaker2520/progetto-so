@@ -34,7 +34,6 @@ void handleCheckUserRole(int socket, const char *buffer);
 void handleUpdatePriority(int socket, const char *buffer);
 void handleGetTicketById(int socket, const char *buffer);
 
-
 typedef enum {
     CMD_NEW_TICKET,
     CMD_GET_ALL_BY_USER,
@@ -84,8 +83,6 @@ int session_count = 0;
 int main(){
     int server_fd, new_socket;
     struct sockaddr_in address;
-    int opt = 1;
-    int addrlen = sizeof(address);
 
     // creazione socket ipv4 e socket TCP
     createSocket(&server_fd);
@@ -157,7 +154,6 @@ void createSocket(int *server_fd){
 }
 
 void configureAddress(struct sockaddr_in *address) {
-    int opt = 1;
     address->sin_family = AF_INET; // IPv4
     address->sin_addr.s_addr = INADDR_ANY; // Accetta connessioni da qualsiasi indirizzo
     address->sin_port = htons(PORT); // Imposta la porta
@@ -198,7 +194,6 @@ int handleClientRequest(int socket) {
     buffer[bytes_read] = '\0';
     printf("Messaggio ricevuto: %s\n", buffer);
 
-    CommandType cmd = parseCommand(buffer);
     switch (parseCommand(buffer)) {
         case CMD_NEW_TICKET:
             handleNewTicket(socket, buffer);
@@ -593,4 +588,3 @@ void handleGetTicketById(int socket, const char *buffer){
         send(socket, "ERR|Ticket non trovato", 23, 0);
     }
 }
-
