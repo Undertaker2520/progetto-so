@@ -338,105 +338,80 @@ void formatTicket(const Ticket *t, char *dest, size_t maxlen) {
     );
 }
 
-int updateAssignedAgent(int id, const char *assigned_agent){
-    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
-    if (!file) return -1;
-
-    Ticket t;
-    while (fread(&t, sizeof(Ticket), 1, file)) {
-        if (t.id == id) {
-            // Aggiorna i campi
-            strncpy(t.agente, assigned_agent, sizeof(t.agente) - 1);
-            t.agente[sizeof(t.agente) - 1] = '\0';  // assicura il terminatore di stringa
-            
-            // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
-            fseek(file, -sizeof(Ticket), SEEK_CUR);
-            fwrite(&t, sizeof(Ticket), 1, file);
-            fclose(file);
-            return 0; // successo
-        }
-    }
-
-    fclose(file);
-    return -2; // non trovato o non autorizzato
+//Aggiornamento agente
+static const char *_stored_agent;
+static int updateAgentFn(Ticket *t) {
+    strncpy(t->agente, _stored_agent, sizeof(t->agente) - 1);
+    t->agente[sizeof(t->agente) - 1] = '\0';
+    return 0;
+}
+int updateAssignedAgent(int id, const char *assigned_agent) {
+    _stored_agent = assigned_agent;
+    return updateTicketField(id, updateAgentFn);
 }
 
-int updateDescriptionAndTitle(int id, const char *username, const char *nuovo_titolo, const char *nuova_descrizione){
-    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
-    if (!file) return -1;
+//Aggiornamento Titolo e Descrizione
+static const char *_stored_title;
+static const char *_stored_descr;
+static const char *_stored_user;
+static int updateTitleDescrFn(Ticket *t) {
+    if (strcmp(t->username, _stored_user) != 0)
+        return -1;
+
+    strncpy(t->titolo, _stored_title, sizeof(t->titolo) - 1);
+    strncpy(t->descrizione, _stored_descr, sizeof(t->descrizione) - 1);
+    return 0;
+}
+int updateDescriptionAndTitle(int id, const char *username, const char *titolo, const char *descrizione) {
+    _stored_user = username;
+    _stored_title = titolo;
+    _stored_descr = descrizione;
+    return updateTicketField(id, updateTitleDescrFn);
+}
+
+
+//Aggiornamento status
+static const char *_stored_status;
+static int updateStatusFn(Ticket *t) {
+    t->stato = stringToStato(_stored_status);
+    return 0;
+}
+int updateStatus(int id, const char *new_status) {
+    _stored_status = new_status;
+    return updateTicketField(id, updateStatusFn);
+}
+
+//Aggiornamento priorita'
+static const char *_stored_priority;
+static int updatePriorityFn(Ticket *t) {
+    t->priorita = stringToPriorita(_stored_priority);
+    return 0;
+}
+int updatePriority(int id, const char *priority) {
+    _stored_priority = priority;
+    return updateTicketField(id, updatePriorityFn);
+}
+
+
+int updateTicketField(int id, int(*updateFn)(Ticket *)){
+    FILE *file = fopen(TICKET_FILE, "r+b");
+    if(!file) return -1;
 
     Ticket t;
-    while (fread(&t, sizeof(Ticket), 1, file)) {
-        
-        //Normalizzo username per confronto
-        char clean_username[64];
-        memcpy(clean_username, t.username, sizeof(t.username));
-        clean_username[sizeof(clean_username) - 1] = '\0';
-        for (int i = 0; i < sizeof(clean_username); i++) {
-            if (clean_username[i] == '\n' || clean_username[i] == '\r') {
-                clean_username[i] = '\0';
-                break;
+    while(fread(&t, sizeof(Ticket), 1, file)){
+        if(t.id == id){
+            if (!updateFn(&t)) {
+                fseek(file, -sizeof(Ticket), SEEK_CUR);
+                fwrite(&t, sizeof(Ticket), 1, file);
+                fclose(file);
+                return 0;
+            } else {
+                fclose(file);
+                return -1; // fallimento callback
             }
         }
-        
-
-        if (t.id == id && strcmp(clean_username, username) == 0) {
-            // Aggiorna i campi
-            strncpy(t.titolo, nuovo_titolo, sizeof(t.titolo) - 1);
-            strncpy(t.descrizione, nuova_descrizione, sizeof(t.descrizione) - 1);
-
-            // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
-            fseek(file, -sizeof(Ticket), SEEK_CUR);
-            fwrite(&t, sizeof(Ticket), 1, file);
-            fclose(file);
-            return 0; // successo
-        }
     }
 
     fclose(file);
-    return -2; // non trovato 
-}
-
-int updateStatus(int id, const char *new_status){
-    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
-    if (!file) return -1;
-
-    Ticket t;
-    while (fread(&t, sizeof(Ticket), 1, file)) {
-        if (t.id == id) {
-            // Aggiorna i campi
-            t.stato = stringToStato(new_status);
-            
-            // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
-            fseek(file, -sizeof(Ticket), SEEK_CUR);
-            fwrite(&t, sizeof(Ticket), 1, file);
-            fclose(file);
-            return 0; // successo
-        }
-    }
-
-    fclose(file);
-    return -2; // non trovato o non autorizzato
-}
-
-int updatePriority(int id, const char *new_priority){
-    FILE *file = fopen(TICKET_FILE, "r+b"); // lettura + scrittura binaria
-    if (!file) return -1;
-
-    Ticket t;
-    while (fread(&t, sizeof(Ticket), 1, file)) {
-        if (t.id == id) {
-            // Aggiorna i campi
-            t.priorita = stringToPriorita(new_priority);
-            
-            // Riporta il puntatore indietro in modo da sovrascrivere il ticket 
-            fseek(file, -sizeof(Ticket), SEEK_CUR);
-            fwrite(&t, sizeof(Ticket), 1, file);
-            fclose(file);
-            return 0; // successo
-        }
-    }
-
-    fclose(file);
-    return -2; // non trovato o non autorizzato
+    return -2; // non trovato
 }

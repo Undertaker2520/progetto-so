@@ -1,51 +1,51 @@
 #include <stdio.h>
 #include <string.h>
 #include "auth.h"
-#include <sys/socket.h>
 
 #define USER_FILE "users.txt"
 
-int authenticateUser(const char *username, const char *password, char *ruolo) {
+// Funzione interna per leggere ruolo/password dato uno username (case-insensitive)
+static int lookupUser(const char *username, char *out_pwd, char *out_role) {
     FILE *file = fopen(USER_FILE, "r");
     if (!file) return -1;
 
     char line[128];
     while (fgets(line, sizeof(line), file)) {
         char usr[50], pwd[50], role[20];
-        sscanf(line, "%49[^,],%49[^,],%19s", usr, pwd, role);
-
-        if (strcmp(username, usr) == 0 && strcmp(password, pwd) == 0) {
-            strcpy(ruolo, role);
-            fclose(file);
-            return 1; // login success
-        }
-    }
-
-    fclose(file);
-    return 0; // user not found
-}
-
-int getUserRole(const char *username, char *ruolo, size_t maxlen) {
-    FILE *fp = fopen(USER_FILE, "r");  // usa "users.txt"
-    if (!fp) return -1;
-
-    char line[128];
-    while (fgets(line, sizeof(line), fp)) {
-        char file_username[64], file_password[64], file_ruolo[64];
-
-        // parsing da CSV, non pipe-separated
-        if (sscanf(line, "%63[^,],%63[^,],%63[^\n]", file_username, file_password, file_ruolo) == 3) {
-            if (strcasecmp(username, file_username) == 0) {
-                strncpy(ruolo, file_ruolo, maxlen - 1);
-                ruolo[maxlen - 1] = '\0';
-                fclose(fp);
+        if (sscanf(line, "%49[^,],%49[^,],%19s", usr, pwd, role) == 3) {
+            if (strcasecmp(username, usr) == 0) {
+                if (out_pwd) strcpy(out_pwd, pwd);
+                if (out_role) strcpy(out_role, role);
+                fclose(file);
                 return 0;
             }
         }
     }
 
-    fclose(fp);
-    return -1;
+    fclose(file);
+    return -1; // not found
 }
 
+int authenticateUser(const char *username, const char *password, char *ruolo) {
+    char stored_pwd[50], stored_role[20];
+    if (lookupUser(username, stored_pwd, stored_role) == 0) {
+        if (strcmp(password, stored_pwd) == 0) {
+            if (ruolo) strcpy(ruolo, stored_role);
+            return 1; // login ok
+        } else {
+            return 0; // password errata
+        }
+    }
 
+    return 0; // utente non trovato
+}
+
+int getUserRole(const char *username, char *ruolo, size_t maxlen) {
+    char dummy_pwd[50], role[64];
+    if (lookupUser(username, dummy_pwd, role) == 0) {
+        strncpy(ruolo, role, maxlen - 1);
+        ruolo[maxlen - 1] = '\0';
+        return 0;
+    }
+    return -1;
+}

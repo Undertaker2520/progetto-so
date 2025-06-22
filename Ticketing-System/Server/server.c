@@ -34,6 +34,7 @@ void handleCheckUserRole(int socket, const char *buffer);
 void handleUpdatePriority(int socket, const char *buffer);
 void handleGetTicketById(int socket, const char *buffer);
 
+
 typedef enum {
     CMD_NEW_TICKET,
     CMD_GET_ALL_BY_USER,
@@ -592,3 +593,4 @@ void handleGetTicketById(int socket, const char *buffer){
         send(socket, "ERR|Ticket non trovato", 23, 0);
     }
 }
+

@@ -48,6 +48,7 @@ int getTicketsByAgent(const char *agent_username, char *buffer, size_t max_size)
 int updateAssignedAgent(int id, const char *assigned_agent);
 int updateStatus(int id, const char *new_status);
 int updatePriority(int id, const char *new_priority);
+int updateTicketField(int id, int (*updateFn)(Ticket *));
 
 const char* prioritaToString(Priorita p);
 const char* statoToString(Stato s);
