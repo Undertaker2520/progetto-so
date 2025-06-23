@@ -26,7 +26,7 @@ int main() {
     int tentativi = 0;
 
     while (tentativi < 3) {
-        readInput("Login\nMail: ", username, sizeof(username));
+        readInput("Login\nUsername(mail): ", username, sizeof(username));
         readInput("Password: ", password, sizeof(password));
 
         char login_msg[256];

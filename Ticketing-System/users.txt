@@ -1,4 +1,4 @@
 mario.rossi@mail.com,1234,AGENTE
 lucia.verdi@mail.com,abcd,CLIENTE
 pietro.bruni@mail.com,2222,CLIENTE
-paolo.mori@mail.comvor,1111,AGENTE
+paolo.mori@mail.com,1111,AGENTE
